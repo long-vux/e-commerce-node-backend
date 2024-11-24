@@ -45,3 +45,29 @@ exports.googleLogin = async (req, res) => {
 
   res.status(200).json({ message: 'Google login successful', token: newToken })
 }
+
+exports.login = async (req, res) => {
+  const { email, password } = req.body
+  const user = await User.findOne({ email })
+  if (!user) {
+    return res.status(401).json({ message: 'Invalid email or password' })
+  }
+  if (user.password !== password) {
+    return res.status(401).json({ message: 'Invalid email or password' })
+  }
+}
+
+exports.register = async (req, res) => {
+  const { email, password, firstName, lastName, phoneNumber } = req.body
+  const user = await User.findOne({ email })
+  if (user) {
+    return res.status(401).json({ message: 'User already exists' })
+  }
+}
+
+// Create a new user when checkout but not login
+exports.createUser = async (req, res) => {
+  const { email, phoneNumber, address } = req.body
+  const user = await User.create({ email, phoneNumber, address })
+  return res.status(200).json({ message: 'User created successfully', user })
+}
