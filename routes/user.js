@@ -3,10 +3,11 @@ const router = express.Router();
 const UserController = require("../controllers/UserController");
 const auth = require("../middleware/auth");
 
-// router.use(auth);
+router.use(auth);
 
-// router.get("/user", UserController.getUser);
-
+// ==============================================================================
+//                            Profile
+// ==============================================================================
 // PUT /api/user/updateProfile
 router.put("/updateProfile", UserController.updateProfile);
 
@@ -21,16 +22,21 @@ router.post("/password/recover", UserController.recoverPassword);
 // PUT /api/user/password/reset/:userId/:token
 router.put("/password/reset/:userId/:token", UserController.resetPassword);
 
-// POST /api/user/addresses
-router.post("/addresses", UserController.addAddress);
 
-// PUT /api/user/addresses/:addressId
-router.put("/addresses/:addressId", UserController.updateAddress);
-
-// DELETE /api/user/addresses/:addressId
-router.delete("/addresses/:addressId", UserController.deleteAddress);
+// ==============================================================================
+//                            Addresses
+// ==============================================================================
 
 // GET /api/user/addresses
-// router.get("/user/addresses", UserController.getAddresses);
+router.get("/addresses", UserController.getAddresses);  
+
+// POST /api/user/addAddress
+router.post("/addAddress", UserController.addAddress);
+
+// PUT /api/user/updateAddress/:addressId
+router.put("/updateAddress/:addressId", UserController.updateAddress);
+
+// DELETE /api/user/deleteAddress/:addressId
+router.delete("/deleteAddress/:addressId", UserController.deleteAddress);
 
 module.exports = router;

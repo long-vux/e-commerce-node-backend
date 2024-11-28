@@ -2,7 +2,6 @@ const mongoose = require("mongoose");
 
 const AddressSchema = new mongoose.Schema({
   street: { type: String },
-  village: { type: String },
   district: { type: String },
   city: { type: String },
   country: { type: String },
