@@ -17,7 +17,8 @@ router.post('/register', AuthController.register)
 
 // GET /api/auth/:id/verify/:token
 router.get('/:id/verify/:token', AuthController.verifyEmail)
+
 // POST /api/auth/createUser
-// router.post('/createUser', AuthController.createUser)
+router.post('/createUser', AuthController.createUser)
 
 module.exports = router;

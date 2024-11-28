@@ -56,15 +56,15 @@ exports.login = async (req, res) => {
   if (!user) {
     return res.status(401).json({ message: 'Email does not exist' })
   }
-  
+
   const isMatch = await bcrypt.compare(password, user.password)
   if (!isMatch) {
     return res.status(401).json({ message: 'Wrong password' })
   }
 
-  if(!user.verified) {
+  if (!user.verified) {
     let token = await VerifyToken.findOne({ userId: user._id })
-    if(!token) {
+    if (!token) {
       token = await VerifyToken.create({ userId: user._id, token: crypto.randomBytes(32).toString('hex') })
     }
 
@@ -76,7 +76,7 @@ exports.login = async (req, res) => {
     await sendEmail(email, subject, text)
     return res.status(403).json({ message: 'Email not verified. A verification email has been sent.' })
   }
-  
+
   const payload = {
     id: user._id,
     email: user.email,
@@ -92,7 +92,7 @@ exports.login = async (req, res) => {
 
 exports.register = async (req, res) => {
   try {
-    const { firstName, lastName, email, phoneNumber, password, confirmPassword } = req.body
+    const { firstName, lastName, email, phoneNumber, password } = req.body
     let user = await User.findOne({ $or: [{ email }, { phone: phoneNumber }] })
     if (user) {
       return res.status(400).json({ message: 'User already exists. Please log in or use a different email.' });
@@ -100,21 +100,27 @@ exports.register = async (req, res) => {
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
-    
+
     // Create new user
     user = await User.create({ email, password: hashedPassword, firstName, lastName, phoneNumber })
 
-    const token = await VerifyToken.create({ 
-      userId: user._id, 
-      token: crypto.randomBytes(32).toString('hex') 
+    const token = await VerifyToken.create({
+      userId: user._id,
+      token: crypto.randomBytes(32).toString('hex')
     })
 
     const url = `${process.env.FRONTEND_URL}/verify-email/${user._id}/${token.token}`
 
     //   Send OTP via email
     const subject = 'Verify Your Email'
-    const text = `Welcome to MADNESS! Please click <a href="${url}">here</a> to verify your email. This OTP will expire in 1 hour.`
-    await sendEmail(email, subject, text)
+    let htmlContent = `
+      <h1>Welcome to MADNESS!</h1>
+      <p>Thank you for signing up with MADNESS!</p>
+      <p>Please click the link below to verify your email:</p>
+      <a href="${url}">Verify Email</a>
+      <p>This OTP will expire in 1 hour.</p>
+    `
+    await sendEmail(email, subject, htmlContent)
     res.status(200).json({ message: 'An email has been sent to your email address. Please verify to complete registration.' })
   } catch (error) {
     res.status(500).json({ message: 'Error registering user' })
@@ -140,34 +146,39 @@ exports.verifyEmail = async (req, res) => {
   }
 }
 
-
 // Create a new user when checkout but not login
-// exports.createUser = async (req, res) => {
-//   const { lastName, firstName, phoneNumber, address } = req.body
-//   const user = await User.findOne({ phone: phoneNumber })
-//   if (user) {
-//     return res.status(401).json({ message: 'User already created, please login to see more from your cart' })
-//   }
-  
-//   const parsedPhoneNumber = parsePhoneNumberFromString(phoneNumber, 'VN')
-//   if(!parsedPhoneNumber || !parsedPhoneNumber.isValid()) {
-//     return res.status(401).json({ message: 'Invalid phone number' })
-//   }
-//   const formattedPhoneNumber = parsedPhoneNumber.number // E.164 format
-//   const password = generateRandomPassword()
-//   try {
-//     await sendSms(formattedPhoneNumber, `Welcome! Your account has been created. Your password is: ${password}. Please don't share it with anyone.`)
-//     console.log('password', password);
-//   } catch (error) {
-//     return res.status(500).json({ error: error.message })
-//   }
+exports.createUser = async (req, res) => {
+  const { lastName, firstName, email, address } = req.body
+  try {
+    let user = await User.findOne({ email })
+    if (user) {
+      return res.status(401).json({ message: 'User already created, please login to see more from your cart' })
+    }
+    const randomPassword = crypto.randomBytes(10).toString('hex').slice(0, 8)
+    const hashedPassword = await bcrypt.hash(randomPassword, 10)
+    user = await User.create({ lastName, firstName, email, address, password: hashedPassword })
 
-//   try {
-//     const hashedPassword = await bcrypt.hash(password, 10)
-//     const newUser = await User.create({ lastName, firstName, phoneNumber, address, password: hashedPassword })
-//     return res.status(200).json({ message: 'User created successfully', user: newUser })
-//   } catch (error) {
-//     return res.status(500).json({ message: 'Error creating user' })
-//   }
-// }
+    const token = await VerifyToken.create({
+      userId: user._id,
+      token: crypto.randomBytes(8).toString('hex')
+    })
+  
+    //   Send OTP via email
+    const url = `${process.env.FRONTEND_URL}/verify-email/${user._id}/${token.token}`
+    const subject = 'Verify Your Email and Set Your Password'
+    const htmlContent = `
+      <h1>Welcome to MADNESS!</h1>
+      <p>Thank you for browing and making purchases at MADNESS!</p>
+      <p>Please click the link below to verify your email and set your password:</p>
+      <a href="${url}">Verify Email</a>
+      <p>Your temporary password is: <strong>${randomPassword}</strong></p>
+      <p>Please change your password after logging in for security reasons.</p>
+      <p>Best regards,<br/>MADNESS Team</p>
+    `
+    await sendEmail(email, subject, htmlContent)
+    res.status(200).json({ message: 'An email has been sent to your email address. Please verify to complete registration.' })
+  } catch (error) {
+    return res.status(500).json({ message: 'Error creating user' })
+  }
+}
 
