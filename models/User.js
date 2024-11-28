@@ -1,18 +1,27 @@
 const mongoose = require("mongoose");
-const bcrypt = require('bcrypt')
+
+const AddressSchema = new mongoose.Schema({
+  street: { type: String },
+  village: { type: String },
+  district: { type: String },
+  city: { type: String },
+  country: { type: String },
+  contactName: { type: String },
+  contactPhone: { type: String },
+}, { timestamps: true });
 
 const UserSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    unique: true,
-  },
   firstName: { type: String },
   lastName: { type: String },
-  image: { type: String },
+  email: { type: String, unique: true },
   password: { type: String },
   phone: { type: String },
-  address: { type: String },
+  image: { type: String },
+  addresses: [AddressSchema],
   role: { type: String, enum: ["admin", "user"], default: "user" },
-}, { timestamps: true });
+  verified: { type: Boolean, default: false },
+},
+  { timestamps: true }
+);
 
 module.exports = mongoose.model("User", UserSchema);

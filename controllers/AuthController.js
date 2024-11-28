@@ -2,9 +2,9 @@ const axios = require('axios')
 const User = require('../models/User')
 const jwt = require('jsonwebtoken')
 const bcrypt = require('bcrypt')
-// const { parsePhoneNumberFromString } = require('libphonenumber-js')
-// const { generateRandomPassword, sendSms } = require('../services/checkoutService')
-const { parseIdentifier } = require('../utils/identifierHelper')
+const crypto = require('crypto')
+const VerifyToken = require('../models/VerifyToken')
+const sendEmail = require('../utils/sendEmail')
 
 exports.googleLogin = async (req, res) => {
   const token = req.body.token
@@ -54,12 +54,27 @@ exports.login = async (req, res) => {
   const { email, password } = req.body
   const user = await User.findOne({ email })
   if (!user) {
-    return res.status(401).json({ message: 'Invalid email or password' })
+    return res.status(401).json({ message: 'Email does not exist' })
   }
   
   const isMatch = await bcrypt.compare(password, user.password)
   if (!isMatch) {
     return res.status(401).json({ message: 'Wrong password' })
+  }
+
+  if(!user.verified) {
+    let token = await VerifyToken.findOne({ userId: user._id })
+    if(!token) {
+      token = await VerifyToken.create({ userId: user._id, token: crypto.randomBytes(32).toString('hex') })
+    }
+
+    const url = `${process.env.FRONTEND_URL}/verify-email/${user._id}/${token.token}`
+
+    //   Send OTP via email
+    const subject = 'Verify Your Email'
+    const text = `Welcome to MADNESS! Please click <a href="${url}">here</a> to verify your email. This OTP will expire in 1 hour.`
+    await sendEmail(email, subject, text)
+    return res.status(403).json({ message: 'Email not verified. A verification email has been sent.' })
   }
   
   const payload = {
@@ -76,19 +91,55 @@ exports.login = async (req, res) => {
 }
 
 exports.register = async (req, res) => {
-  const { email, password, firstName, lastName, phoneNumber } = req.body
-  const user = await User.findOne({ $or: [{ email }, { phone: phoneNumber }] })
-  if (user) {
-    console.log(user);
-    return res.status(401).json({ message: 'User already exists' })
+  try {
+    const { firstName, lastName, email, phoneNumber, password, confirmPassword } = req.body
+    let user = await User.findOne({ $or: [{ email }, { phone: phoneNumber }] })
+    if (user) {
+      return res.status(400).json({ message: 'User already exists. Please log in or use a different email.' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10)
+    
+    // Create new user
+    user = await User.create({ email, password: hashedPassword, firstName, lastName, phoneNumber })
+
+    const token = await VerifyToken.create({ 
+      userId: user._id, 
+      token: crypto.randomBytes(32).toString('hex') 
+    })
+
+    const url = `${process.env.FRONTEND_URL}/verify-email/${user._id}/${token.token}`
+
+    //   Send OTP via email
+    const subject = 'Verify Your Email'
+    const text = `Welcome to MADNESS! Please click <a href="${url}">here</a> to verify your email. This OTP will expire in 1 hour.`
+    await sendEmail(email, subject, text)
+    res.status(200).json({ message: 'An email has been sent to your email address. Please verify to complete registration.' })
+  } catch (error) {
+    res.status(500).json({ message: 'Error registering user' })
   }
-
-  const hashedPassword = await bcrypt.hash(password, 10)
-
-  const newUser = await User.create({ email, password: hashedPassword, firstName, lastName, phoneNumber })
-
-  res.status(200).json({ message: 'Register successful, please login', user: newUser })
 }
+
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { id, token } = req.params
+    const user = await User.findById(id)
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+    const verifyToken = await VerifyToken.findOne({ userId: id, token })
+    if (!verifyToken) {
+      return res.status(401).json({ message: 'Invalid link' })
+    }
+    user.verified = true
+    await user.save()
+    res.status(200).json({ message: 'Email verified successfully' })
+  } catch (error) {
+    res.status(500).json({ message: 'Error verifying email' })
+  }
+}
+
 
 // Create a new user when checkout but not login
 // exports.createUser = async (req, res) => {
