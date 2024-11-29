@@ -1,10 +1,22 @@
 const mongoose = require("mongoose");
 
-const productSchema = mongoose.Schema({
-    name: String,
-    price: Number,
-    description: String
+const variantSchema = mongoose.Schema({
+  color: String,    
+  size: String,
+  stock: Number,
 });
+
+const productSchema = mongoose.Schema({
+  name: String,
+  price: Number,
+  image: String,
+  description: String,
+  tags: [String],
+  categories: [String],
+  variants: [variantSchema],
+});
+
+productSchema.index({ name: 'text', price: 1 });
 
 const Product = mongoose.model("Product", productSchema);
 
