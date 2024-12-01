@@ -5,6 +5,7 @@ const bcrypt = require('bcrypt')
 const crypto = require('crypto')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
+const Cart = require('../models/Cart')
 
 exports.googleLogin = async (req, res) => {
   const token = req.body.token
@@ -77,6 +78,28 @@ exports.login = async (req, res) => {
     return res.status(403).json({ message: 'Email not verified. A verification email has been sent.' })
   }
 
+  // Initialize session cart
+  req.session.user = user._id
+
+  // merge user cart with session cart
+  if (req.session.cart && req.session.cart.length > 0) {
+    const userCart = await Cart.findOne({ user: user._id })
+    if (!userCart) {
+      await Cart.create({ user: user._id, items: req.session.cart })
+    } else {
+      req.session.cart.forEach(item => {
+        const existingItem = userCart.items.find(i => i.product.toString() === item.productId)
+        if (existingItem) {
+          existingItem.quantity += item.quantity
+        } else {
+          userCart.items.push(item)
+        }
+      })
+      await userCart.save()
+    }
+    req.session.cart = []
+  }
+
   const payload = {
     id: user._id,
     email: user.email,
@@ -86,13 +109,14 @@ exports.login = async (req, res) => {
     role: user.role,
   }
 
-  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5h' })
+  const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' })
   res.status(200).json({ message: 'Login successful', token })
 }
 
 exports.register = async (req, res) => {
   try {
-    const { firstName, lastName, email, phoneNumber, password } = req.body
+    const 
+    { firstName, lastName, email, phoneNumber, password } = req.body
     let user = await User.findOne({ $or: [{ email }, { phone: phoneNumber }] })
     if (user) {
       return res.status(400).json({ message: 'User already exists. Please log in or use a different email.' });
@@ -100,8 +124,6 @@ exports.register = async (req, res) => {
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
-
-    // Create new user
     user = await User.create({ email, password: hashedPassword, firstName, lastName, phoneNumber })
 
     const token = await VerifyToken.create({
@@ -145,40 +167,3 @@ exports.verifyEmail = async (req, res) => {
     res.status(500).json({ message: 'Error verifying email' })
   }
 }
-
-// Create a new user when checkout but not login
-exports.createUser = async (req, res) => {
-  const { lastName, firstName, email, address } = req.body
-  try {
-    let user = await User.findOne({ email })
-    if (user) {
-      return res.status(401).json({ message: 'User already created, please login to see more from your cart' })
-    }
-    const randomPassword = crypto.randomBytes(10).toString('hex').slice(0, 8)
-    const hashedPassword = await bcrypt.hash(randomPassword, 10)
-    user = await User.create({ lastName, firstName, email, address, password: hashedPassword })
-
-    const token = await VerifyToken.create({
-      userId: user._id,
-      token: crypto.randomBytes(8).toString('hex')
-    })
-  
-    //   Send OTP via email
-    const url = `${process.env.FRONTEND_URL}/verify-email/${user._id}/${token.token}`
-    const subject = 'Verify Your Email and Set Your Password'
-    const htmlContent = `
-      <h1>Welcome to MADNESS!</h1>
-      <p>Thank you for browing and making purchases at MADNESS!</p>
-      <p>Please click the link below to verify your email and set your password:</p>
-      <a href="${url}">Verify Email</a>
-      <p>Your temporary password is: <strong>${randomPassword}</strong></p>
-      <p>Please change your password after logging in for security reasons.</p>
-      <p>Best regards,<br/>MADNESS Team</p>
-    `
-    await sendEmail(email, subject, htmlContent)
-    res.status(200).json({ message: 'An email has been sent to your email address. Please verify to complete registration.' })
-  } catch (error) {
-    return res.status(500).json({ message: 'Error creating user' })
-  }
-}
-
