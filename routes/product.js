@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const ProductController = require("../controllers/ProductController");
-const auth = require("../middleware/auth");
+const { auth } = require("../middleware/authMiddleware");
 
 // GET /api/product/search
 router.get("/search", ProductController.searchProducts);
