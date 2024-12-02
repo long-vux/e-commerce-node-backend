@@ -3,13 +3,12 @@ const cors = require("cors");
 const bodyParser = require("body-parser");
 const connectDB = require("./config/db");
 const cartRoutes = require("./routes/cart");
-// const sessionMiddleware = require("./middleware/sessionMiddleware");
+const couponRoutes = require("./routes/coupon");
 const dotenv = require("dotenv");
 const authRoutes = require("./routes/auth");
 const adminRoutes = require("./routes/admin");
 const userRoutes = require("./routes/user");
 const productRoutes = require("./routes/product");
-const checkoutRoutes = require("./routes/checkout");
 const MongoStore = require('connect-mongo');
 
 const session = require("express-session");
@@ -19,7 +18,6 @@ connectDB();
 
 app.use(bodyParser.json({ limit: "30mb", extended: true }));
 app.use(bodyParser.urlencoded({ limit: "30mb", extended: true }));
-// app.use(sessionMiddleware);
 app.use(cors({
   origin: ['http://localhost:3000', 'https://yourdomain.com'],
   credentials: true,
@@ -46,8 +44,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/product', productRoutes);
 app.use("/api/cart", cartRoutes);
-app.use("/api/checkout", checkoutRoutes);
-
+app.use("/api/coupon", couponRoutes);
 
 const PORT = process.env.PORT || 5000;  
 

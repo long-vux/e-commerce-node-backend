@@ -17,7 +17,11 @@ const UserSchema = new mongoose.Schema({
   phone: { type: String },
   image: { type: String },
   addresses: [AddressSchema],
-  orders: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
+  orders: { 
+    type: [mongoose.Schema.Types.ObjectId], 
+    ref: 'Order', 
+    default: [] 
+  },
   role: { type: String, enum: ["admin", "user"], default: "user" },
   verified: { type: Boolean, default: false },
 }, { timestamps: true });
