@@ -9,7 +9,6 @@ const cartItemSchema = new Schema({
 
 const CartSchema = new Schema({
   user: { type: Schema.Types.ObjectId, ref: 'User', unique: true },
-  sessionId: { type: String, unique: true },
   items: [cartItemSchema],
   coupons: { 
     type: [Schema.Types.ObjectId], 
