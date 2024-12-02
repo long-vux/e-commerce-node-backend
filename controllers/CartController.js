@@ -18,11 +18,10 @@ exports.addToCart = async (req, res) => {
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     return res.status(400).json({ message: 'Invalid product ID' });
   }
-  console.log('user', req.user)
 
   try {
     if (req.user) {
-      console.log('req.user._id', req.user._id)
+      // authenticated user
       let cart = await Cart.findOne({ user: req.user._id });
       if (!cart) {
         cart = new Cart({ user: req.user._id, items: [] });
@@ -39,17 +38,17 @@ exports.addToCart = async (req, res) => {
       await cart.save();
       res.status(200).json({ message: 'Item added to cart', cart });
     } else {
-      console.log('req.session', req.session)
+      console.log('req.session.cart', req.session.cart)
       if (!req.session.cart) {
-        req.session.cart = [];
+        req.session.cart = { items: [], coupons: [] };
       }
 
-      const existingItem = req.session.cart.find(item => item.product.toString() === productId);
+      const existingItem = req.session.cart.items.find(item => item.product.toString() === productId);
       if (existingItem) {
         existingItem.quantity = parseInt(existingItem.quantity) + parseInt(quantity);
         existingItem.price = parseInt(existingItem.price) + parseInt(price)
       } else {
-        req.session.cart.push({ product: productId, quantity, price });
+        req.session.cart.items.push({ product: productId, quantity, price });
       }
 
       res.status(200).json({ message: 'Item added to cart', cart: req.session.cart });
@@ -103,7 +102,7 @@ exports.clearCart = async (req, res) => {
  * Supports both anonymous and authenticated users.
  */
 exports.removeItem = async (req, res) => {
-  const { productId } = req.body;
+  const { productId } = req.params;
 
   try {
     if (req.user) {
@@ -111,12 +110,18 @@ exports.removeItem = async (req, res) => {
       cart.items = cart.items.filter(
         (item) => item.product.toString() !== productId
       );
-
       await cart.save();
       res.status(200).json({ message: 'Item removed from cart', cart });
     } else {
-      req.session.cart = req.session.cart.filter(item => item.product.toString() !== productId);
-      res.status(200).json({ message: 'Item removed from cart', cart: req.session.cart });
+      let cart = req.session.cart
+      cart.items = cart.items.filter(item => item.product.toString() !== productId);
+
+      // if cart is empty, set it to empty object (have items and coupons to avoid undefined)
+      if (cart.items.length === 0) {
+        req.session.cart = { items: [], coupons: [] };
+      }
+
+      res.status(200).json({ message: 'Item removed from cart', cart });
     }
   } catch (error) {
     res.status(500).json({ message: 'Error removing item from cart', error });
@@ -128,46 +133,76 @@ exports.applyCoupon = async (req, res) => {
   try {
     // find cart
     let cart
-    if (req.user)
+    if (req.user) {
       cart = await Cart.findOne({ user: req.user._id });
-    else
-      cart = req.session.cart
-
+    } else {
+      // Initialize cart structure if not present
+      if (!req.session.cart) {
+        req.session.cart = { items: [], coupons: [] };
+      }
+      cart = req.session.cart;
+    }
     if (!cart)
       return res.status(400).json({ message: 'Cart not found', error: error.message });
-
     // find coupon
     const coupon = await Coupon.findOne({ _id: couponId, isActive: true });
-    if (!coupon)
-      return res.status(400).json({ message: 'Coupon not found', error: error.message });
+    if (!coupon) {
+      return res.status(400).json({ message: 'Coupon not found' });
+    }
 
-    // apply coupon
-    cart.coupons.push(couponId);
-    await cart.save();
+    if (req.user) {
+      // Apply coupon for authenticated user
+      if (!cart.coupons) {
+        cart.coupons = [];
+      }
+      if (cart.coupons.includes(couponId)) {
+        return res.status(400).json({ message: 'Coupon already applied', cart });
+      }
+      cart.coupons.push(couponId);
+      await cart.save();
+    } else {
+      // Apply coupon for anonymous user
+      if (!cart.coupons) {
+        cart.coupons = [];
+      }
+      if (cart.coupons.includes(couponId)) {
+        return res.status(400).json({ message: 'Coupon already applied', cart });
+      }
+      cart.coupons.push(couponId);
+      req.session.cart = cart; // Save the updated cart back to session
+    }
 
-    res.status(200).json(coupon);
+    res.status(200).json({ message: 'Coupon applied', cart });
   } catch (error) {
     res.status(500).json({ message: 'Error applying coupon', error: error.message });
   }
 }
 
 exports.removeCoupon = async (req, res) => {
-  const { couponId } = req.body;
+  const { couponId } = req.params;
   try {
     let cart
-    if (req.user)
+    if (req.user) {
       cart = await Cart.findOne({ user: req.user._id });
-    else
-      cart = await Cart.findOne({ sessionId: req.session.id });
+      cart.coupons = cart.coupons.filter(id => id.toString() !== couponId);
+      await cart.save();
+    } else {
+      cart = req.session.cart;
+      if (!cart) {
+        cart = { items: [], coupons: [] };
+      }
+
+      cart.coupons = cart.coupons.filter(id => id.toString() !== couponId);
+      req.session.cart = cart;
+    }
 
     if (!cart)
       return res.status(400).json({ message: 'Cart not found' });
 
     cart.coupons = cart.coupons.filter(id => id.toString() !== couponId);
-    await cart.save();
-    res.status(200).json({ message: 'Coupon removed from cart' });
+    res.status(200).json({ message: 'Coupon removed from cart', cart });
   } catch (error) {
-    res.status(500).json({ message: 'Error removing coupon from cart', error });
+    res.status(500).json({ message: 'Error removing coupon from cart', error: error.message });
   }
 }
 
