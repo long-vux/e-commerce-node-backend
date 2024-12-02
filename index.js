@@ -2,14 +2,17 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const connectDB = require("./config/db");
-const cartRoutes = require("./routes/cart");
-const couponRoutes = require("./routes/coupon");
 const dotenv = require("dotenv");
+const MongoStore = require('connect-mongo');
+
+// Import Routes
 const authRoutes = require("./routes/auth");
 const adminRoutes = require("./routes/admin");
-const userRoutes = require("./routes/user");
 const productRoutes = require("./routes/product");
-const MongoStore = require('connect-mongo');
+const cartRoutes = require("./routes/cart");
+const couponRoutes = require("./routes/coupon");
+const userRoutes = require("./routes/user");
+const orderRoutes = require("./routes/order");  
 
 const session = require("express-session");
 dotenv.config();
@@ -45,6 +48,7 @@ app.use('/api/user', userRoutes);
 app.use('/api/product', productRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/coupon", couponRoutes);
+app.use("/api/order", orderRoutes);
 
 const PORT = process.env.PORT || 5000;  
 
