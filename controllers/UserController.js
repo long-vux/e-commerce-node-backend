@@ -1,5 +1,4 @@
 const bcrypt = require('bcrypt')
-const { parseIdentifier } = require('../utils/identifierHelper')
 const User = require('../models/User')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
@@ -119,10 +118,9 @@ exports.getAddresses = async (req, res) => {
 exports.addAddress = async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log('req.user  ', req.user);
     const address = req.body;
-
     const user = await User.findById(userId);
+    console.log('address', user.addresses);
     user.addresses.push(address);
     await user.save();
 
