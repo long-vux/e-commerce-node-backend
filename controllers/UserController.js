@@ -21,16 +21,10 @@ exports.updateProfile = async (req, res) => {
 }
 
 exports.changePassword = async (req, res) => {
-  const { identifier, oldPassword, newPassword } = req.body
-
-  // Determine if the identifier is an email or phone number
-  const { query, error } = parseIdentifier(identifier)
-  if (error) {
-    return res.status(error.status).json({ message: error.message })
-  }
+  const { email, oldPassword, newPassword } = req.body
 
   try {
-    const user = await User.findOne(query)
+    const user = await User.findOne({ email })
     if (!user) {
       return res.status(404).json({ message: 'User not found' })
     }
@@ -125,6 +119,7 @@ exports.getAddresses = async (req, res) => {
 exports.addAddress = async (req, res) => {
   try {
     const userId = req.user.id;
+    console.log('req.user  ', req.user);
     const address = req.body;
 
     const user = await User.findById(userId);
@@ -133,7 +128,7 @@ exports.addAddress = async (req, res) => {
 
     res.status(200).json({ success: true, data: user.addresses });
   } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message });
   }
 }
 

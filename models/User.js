@@ -1,12 +1,12 @@
 const mongoose = require("mongoose");
 
 const AddressSchema = new mongoose.Schema({
-  street: { type: String },
+  province: { type: String },
   district: { type: String },
-  city: { type: String },
-  country: { type: String },
-  contactName: { type: String },
-  contactPhone: { type: String },
+  ward: { type: String },
+  street: { type: String },
+  receiverName: { type: String },
+  receiverPhone: { type: String },
 }, { timestamps: true });
 
 const UserSchema = new mongoose.Schema({
