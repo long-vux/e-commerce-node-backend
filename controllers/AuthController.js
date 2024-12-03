@@ -20,22 +20,26 @@ exports.googleLogin = async (req, res) => {
     if (!userObject) {
       return res.status(401).json({ message: 'Invalid token' })
     }
-    const user = await User.findOne({ email: userObject.email })
+    let user = await User.findOne({ email: userObject.email })
     if (!user) {
-      const newUser = new User({
+      user = new User({
         email: userObject.email,
         password: userObject.sub,
         firstName: userObject.given_name,
         lastName: userObject.family_name,
         role: 'user',
+        verified: true,
         image: userObject.picture,
+        addresses: [],
+        orders: [],
       })
-      await newUser.save()
+      await user.save()
     } else {
       payload.role = user.role
     }
 
     payload = {
+      id: user._id,
       email: userObject.email,
       firstName: userObject.given_name,
       lastName: userObject.family_name,
