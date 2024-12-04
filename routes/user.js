@@ -21,7 +21,6 @@ router.post("/password/recover", UserController.recoverPassword);
 // PUT /api/user/password/reset/:userId/:token
 router.put("/password/reset/:userId/:token", UserController.resetPassword);
 
-
 // ==============================================================================
 //                            Addresses
 // ==============================================================================

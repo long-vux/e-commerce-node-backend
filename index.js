@@ -4,8 +4,7 @@ const bodyParser = require("body-parser");
 const connectDB = require("./config/db");
 const dotenv = require("dotenv");
 const MongoStore = require('connect-mongo');
-const s3Client = require('./config/aws');
-
+const multer = require('multer');
 
 // Import Routes
 const authRoutes = require("./routes/auth");
@@ -27,6 +26,8 @@ app.use(cors({
   origin: ['http://localhost:3000', 'https://yourdomain.com'],
   credentials: true,
 }));
+
+const upload = multer({ dest: 'uploads/' });
 
 app.use(session({
   secret: process.env.SESSION_SECRET,

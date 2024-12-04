@@ -5,6 +5,7 @@ const { authOptional } = require('../middleware/authMiddleware');
 
 router.post('/add-to-cart', authOptional, CartController.addToCart);
 router.get('/get-cart', authOptional, CartController.getCart);
+router.get('/get-minicart', authOptional, CartController.getMiniCart);
 router.delete('/clear-cart', authOptional, CartController.clearCart);
 router.delete('/remove-item/:productId', authOptional, CartController.removeItem);
 router.post('/apply-coupon', authOptional, CartController.applyCoupon);
