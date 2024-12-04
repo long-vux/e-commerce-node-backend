@@ -3,11 +3,21 @@ const User = require('../models/User')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const crypto = require('crypto')
+const uploadToS3 = require('../utils/s3Upload')
 
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
     const updateData = req.body;
+    let s3ImageUrl = null;
+    if (req.file) {
+      const fileName = `${Date.now()}_${req.file.originalname}`;
+      s3ImageUrl = await uploadToS3(req.file.buffer, fileName, req.file.mimetype);
+    }
+    if (s3ImageUrl) {
+      updateData.avatar = s3ImageUrl;
+    }
+
     const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
