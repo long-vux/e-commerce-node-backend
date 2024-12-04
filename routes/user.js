@@ -3,16 +3,14 @@ const router = express.Router();
 const UserController = require("../controllers/UserController");
 const { auth } = require("../middleware/authMiddleware");
 
-router.use(auth);
-
 // ==============================================================================
 //                            Profile
 // ==============================================================================
 // PUT /api/user/updateProfile
-router.put("/updateProfile", UserController.updateProfile);
+router.put("/updateProfile", auth, UserController.updateProfile);
 
-// POST /api/user/password/change
-router.post("/password/change", UserController.changePassword);
+// PUT /api/user/password/change
+router.put("/password/change", auth, UserController.changePassword);
 
 // User Action: User requests to recover their password by providing their email.
 // POST /api/user/password/recover
@@ -28,15 +26,15 @@ router.put("/password/reset/:userId/:token", UserController.resetPassword);
 // ==============================================================================
 
 // GET /api/user/addresses
-router.get("/addresses", UserController.getAddresses);  
+router.get("/addresses", auth, UserController.getAddresses);  
 
 // POST /api/user/addAddress
-router.post("/addAddress", UserController.addAddress);
+router.post("/addAddress", auth, UserController.addAddress);
 
 // PUT /api/user/updateAddress/:addressId
-router.put("/updateAddress/:addressId", UserController.updateAddress);
+router.put("/updateAddress/:addressId", auth, UserController.updateAddress);
 
 // DELETE /api/user/deleteAddress/:addressId
-router.delete("/deleteAddress/:addressId", UserController.deleteAddress);
+router.delete("/deleteAddress/:addressId", auth, UserController.deleteAddress);
 
 module.exports = router;
