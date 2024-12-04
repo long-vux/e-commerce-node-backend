@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { admin } = require('../middleware/authMiddleware')
 const AdminController = require('../controllers/AdminController')
+const upload = require('../middleware/multer')
 
 router.use(admin)
 
@@ -20,7 +21,7 @@ router.get('/revenue', AdminController.getRevenue)
 router.get('/best-selling-products', AdminController.getBestSellingProducts)
 
 // ================================= Product ================================
-router.post('/add-product', AdminController.addProduct)
+router.post('/add-product', upload.single('image'), AdminController.addProduct)
 router.put("/:id", AdminController.updateProduct);
 router.delete("/:id", AdminController.deleteProduct);
 

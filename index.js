@@ -4,6 +4,8 @@ const bodyParser = require("body-parser");
 const connectDB = require("./config/db");
 const dotenv = require("dotenv");
 const MongoStore = require('connect-mongo');
+const s3Client = require('./config/aws');
+
 
 // Import Routes
 const authRoutes = require("./routes/auth");

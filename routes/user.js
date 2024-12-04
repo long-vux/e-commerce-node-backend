@@ -2,12 +2,13 @@ const express = require("express");
 const router = express.Router();
 const UserController = require("../controllers/UserController");
 const { auth } = require("../middleware/authMiddleware");
+const upload = require("../middleware/multer");
 
 // ==============================================================================
 //                            Profile
 // ==============================================================================
 // PUT /api/user/updateProfile
-router.put("/updateProfile", auth, UserController.updateProfile);
+router.put("/updateProfile", auth, upload.single('image'), UserController.updateProfile);
 
 // PUT /api/user/password/change
 router.put("/password/change", auth, UserController.changePassword);
