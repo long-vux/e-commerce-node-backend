@@ -6,6 +6,8 @@ const crypto = require('crypto')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const Cart = require('../models/Cart')
+const { getFromS3 } = require('../utils/s3Upload')
+
 
 exports.googleLogin = async (req, res) => {
   const token = req.body.token
@@ -34,20 +36,28 @@ exports.googleLogin = async (req, res) => {
         orders: [],
       })
       await user.save()
-    } else {
-      payload.role = user.role
-    }
 
-    payload = {
-      id: user._id,
-      email: userObject.email,
-      firstName: userObject.given_name,
-      lastName: userObject.family_name,
-      role: payload.role || 'user',
-      image: userObject.picture,
+      payload = {
+        id: user._id,
+        email: userObject.email,
+        firstName: userObject.given_name,
+        lastName: userObject.family_name,
+        role: 'user',
+        image: userObject.picture,
+      }
+    } else {
+      const imageUrl = await getFromS3(user.image)
+      payload = {
+        id: user._id,
+        email: userObject.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        image: imageUrl,
+      }
     }
   } catch (error) {
-    return res.status(401).json({ message: 'Invalid token' })
+    return res.status(401).json({ message: error.message })
   }
 
   const newToken = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '5h' })

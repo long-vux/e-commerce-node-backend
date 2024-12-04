@@ -3,26 +3,26 @@ const router = express.Router();
 const { admin } = require('../middleware/authMiddleware')
 const AdminController = require('../controllers/AdminController')
 const upload = require('../middleware/multer')
+const { auth } = require('../middleware/authMiddleware')
 
-router.use(admin)
 
 // ================================= User ================================
-router.get('/', AdminController.getUsers)
-router.put('/:userId/ban', AdminController.banUser)
-router.get('/new-users', AdminController.getNewUsers)
+router.get('/', auth, admin, AdminController.getUsers)
+router.put('/:userId/ban', auth, admin, AdminController.banUser)
+router.get('/new-users', auth, admin, AdminController.getNewUsers)
 
 // ================================= Order ================================
-router.get('/orders', AdminController.getOrdersPaginated)
+router.get('/orders', auth, admin, AdminController.getOrdersPaginated)
 
 // ================================= Revenue ================================
-router.get('/revenue', AdminController.getRevenue)
+router.get('/revenue', auth, admin, AdminController.getRevenue)
 
 // ================================= Best Selling Products ================================
-router.get('/best-selling-products', AdminController.getBestSellingProducts)
+router.get('/best-selling-products', auth, admin, AdminController.getBestSellingProducts)
 
 // ================================= Product ================================
-router.post('/add-product', upload.single('image'), AdminController.addProduct)
-router.put("/:id", AdminController.updateProduct);
-router.delete("/:id", AdminController.deleteProduct);
+router.post('/add-product', auth, admin, upload.single('image'), AdminController.addProduct)
+router.put("/:id", auth, admin, AdminController.updateProduct);
+router.delete("/:id", auth, admin, AdminController.deleteProduct);
 
 module.exports = router;

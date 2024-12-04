@@ -13,7 +13,7 @@ const Order = require('../models/Order');
  * Supports both anonymous and authenticated users.
  */
 exports.addToCart = async (req, res) => {
-  const { productId, quantity, price } = req.body;
+  const { productId, quantity, price, selectedVariant } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     return res.status(400).json({ message: 'Invalid product ID' });
@@ -29,8 +29,9 @@ exports.addToCart = async (req, res) => {
       if (existingItem) {
         existingItem.quantity = parseInt(existingItem.quantity) + parseInt(quantity);
         existingItem.price = parseInt(existingItem.price) + parseInt(price)
+        existingItem.selectedVariant = selectedVariant
       } else {
-        cart.items.push({ product: productId, quantity, price });
+        cart.items.push({ product: productId, quantity, price, selectedVariant });
       }
 
       await cart.save();
@@ -64,8 +65,31 @@ exports.getCart = async (req, res) => {
   try {
     if (req.user) {
       // Authenticated User: Retrieve cart from the database
-      const cart = await Cart.findOne({ user: req.user.id });
+      const cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image variants');
+
       res.status(200).json({ cart });
+    } else {
+      // Anonymous User: Retrieve cart from the session
+      res.status(200).json({ cart: req.session.cart });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Error getting cart', error: error.message });
+  }
+}
+
+exports.getMiniCart = async (req, res) => {
+  try {
+    if (req.user) {
+      // Authenticated User: Retrieve cart from the database
+      const cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
+
+      const items = cart.items.map(item => ({
+        name: item.product.name,
+        price: item.product.price,
+        quantity: item.quantity,
+        image: item.product.image
+      }));
+      res.status(200).json({ items });
     } else {
       // Anonymous User: Retrieve cart from the session
       res.status(200).json({ cart: req.session.cart });
@@ -304,7 +328,7 @@ exports.checkout = async (req, res) => {
 
     user.orders.push(order._id)
     await user.save()
-    
+
     if (req.user) {
       cart.items = cart.items.filter(item => !selectedItemIds.includes(item.product.toString()))
       cart.discount = 0
