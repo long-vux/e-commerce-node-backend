@@ -20,8 +20,8 @@ exports.updateProfile = async (req, res) => {
 }
 
 exports.changePassword = async (req, res) => {
-  const { email, oldPassword, newPassword } = req.body
-
+  const { oldPassword, newPassword } = req.body
+  const email = req.user.email
   try {
     const user = await User.findOne({ email })
     if (!user) {
@@ -57,7 +57,7 @@ exports.recoverPassword = async (req, res) => {
       token: crypto.randomBytes(32).toString('hex')
     })
 
-    const url = `${process.env.FRONTEND_URL}/reset-password/${user._id}/${token.token}`
+    const url = `${process.env.FRONTEND_URL}/recover-password/${user._id}/${token.token}`
     const subject = 'Reset Your Password'
     const htmlContent = `
       <h1>Hi ${user.firstName}!</h1>
