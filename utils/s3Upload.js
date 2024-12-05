@@ -24,7 +24,8 @@ const uploadToS3 = async (fileBuffer, fileName, mimeType) => {
 };
 
 /**
- * Gets a file from AWS S3.
+ * Gets a file from AWS S3. This method use to get image from aws s3.
+ * But in our project, we will get image from cloudfront url.
  * @param {string} fileName - The name of the file.
  * @returns {Promise<string>} - The URL of the file.
  */

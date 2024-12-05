@@ -12,7 +12,6 @@ const auth = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     req.user = decoded; // Attach user information to the request object
-    // console.log('req.user', req.user);
     next();
   } catch (error) {
     res.status(401).json({ success: false, message: 'Unauthorized: Invalid token' });
@@ -21,7 +20,6 @@ const auth = (req, res, next) => {
 
 // admin middleware
 const admin = (req, res, next) => {
-  console.log('req.user', req.user);
   if (req.user && req.user.role === 'admin') {
     next();
   } else {

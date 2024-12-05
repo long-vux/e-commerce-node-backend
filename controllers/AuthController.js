@@ -129,8 +129,8 @@ exports.login = async (req, res) => {
 
 exports.register = async (req, res) => {
   try {
-    const 
-    { firstName, lastName, email, phoneNumber, password } = req.body
+    const
+      { firstName, lastName, email, phoneNumber, password } = req.body
     let user = await User.findOne({ $or: [{ email }, { phone: phoneNumber }] })
     if (user) {
       return res.status(400).json({ message: 'User already exists. Please log in or use a different email.' });

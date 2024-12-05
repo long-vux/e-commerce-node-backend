@@ -3,27 +3,50 @@ const User = require('../models/User')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const crypto = require('crypto')
-const { uploadToS3 } = require('../utils/s3Upload')
+const { uploadToS3, getFromS3 } = require('../utils/s3Upload')
+const jwt = require('jsonwebtoken')
 
 exports.updateProfile = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const updateData = req.body
+    const email = req.user.email;
+    const { firstName, lastName, phone } = req.body
+    const updateData = { firstName, lastName }
+    if (phone === undefined) {
+      updateData.phone = null;
+    } else {
+      updateData.phone = phone;
+    }
     const image = req.file
     let fileName = null
     if (image) {
       fileName = `${Date.now()}_${image.originalname}`;
+      // upload image to aws s3
       await uploadToS3(image.buffer, fileName, image.mimetype);
     }
     if (fileName) {
       updateData.image = fileName;
-    }
-    const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
+    } 
+
+    const user = await User.findOneAndUpdate({ email }, updateData, { new: true });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    res.status(200).json({ success: true, data: user });
+    let payload = {
+      id: user._id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone
+    }
+    if (fileName) { // get image from cloudfront
+      payload.image = `${process.env.CLOUDFRONT_URL}${fileName}`;
+    } else {
+      payload.image = `${process.env.CLOUDFRONT_URL}${user.image}`;
+    }
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
+    res.status(200).json({ success: true, data: token });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
