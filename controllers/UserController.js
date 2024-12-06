@@ -5,18 +5,38 @@ const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const crypto = require('crypto')
 
-exports.updateProfile = async (req, res) => {
+exports.getProfileById = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const updateData = req.body;
-    const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
+    const userId = req.user.id
+
+    // Find the user by ID from the database
+    const user = await User.findById(userId)
+
+    // If user is not found, return a 404 error
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(404).json({ success: false, message: 'User not found' })
     }
 
-    res.status(200).json({ success: true, data: user });
+    // If user is found, return the user data in the response
+    res.status(200).json({ success: true, data: user })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    // Handle errors by returning a 500 server error
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+exports.updateProfile = async (req, res) => {
+  try {
+    const userId = req.user.id
+    const updateData = req.body
+    const user = await User.findByIdAndUpdate(userId, updateData, { new: true })
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' })
+    }
+
+    res.status(200).json({ success: true, data: user })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
   }
 }
 
@@ -106,74 +126,79 @@ exports.resetPassword = async (req, res) => {
   }
 }
 
-
 // ==============================================================================
 //                            Addresses
 // ==============================================================================
 
 exports.getAddresses = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findById(userId);
-    res.status(200).json({ success: true, data: user.addresses });
+    const userId = req.user.id
+    const user = await User.findById(userId)
+    res.status(200).json({ success: true, data: user.addresses })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message })
   }
-} 
+}
 
 // User Action: User adds a new address.
 exports.addAddress = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const address = req.body;
+    const userId = req.user.id
+    const address = req.body
 
-    const user = await User.findById(userId);
-    user.addresses.push(address);
-    await user.save();
+    const user = await User.findById(userId)
+    user.addresses.push(address)
+    await user.save()
 
-    res.status(200).json({ success: true, data: user.addresses });
+    res.status(200).json({ success: true, data: user.addresses })
   } catch (error) {
-      res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message })
   }
 }
 
 // User Action: User updates an existing address.
 exports.updateAddress = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { addressId } = req.params;
-    const updateData = req.body;
-    const user = await User.findById(userId);
-    const address = user.addresses.id(addressId);
+    const userId = req.user.id
+    const { addressId } = req.params
+    const updateData = req.body
+    const user = await User.findById(userId)
+    const address = user.addresses.id(addressId)
     if (!address) {
-      return res.status(404).json({ success: false, message: 'Address not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Address not found' })
     }
 
-    address.set(updateData);
-    await user.save();
+    address.set(updateData)
+    await user.save()
 
-    res.status(200).json({ success: true, data: address });
+    res.status(200).json({ success: true, data: address })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message })
   }
 }
 
 // User Action: User deletes an existing address.
-exports.deleteAddress = async (req, res) => { 
+exports.deleteAddress = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { addressId } = req.params;
+    const userId = req.user.id
+    const { addressId } = req.params
 
-    const user = await User.findById(userId);
-    const address = user.addresses.id(addressId);
+    const user = await User.findById(userId)
+    const address = user.addresses.id(addressId)
     if (!address) {
-      return res.status(404).json({ success: false, message: 'Address not found' });
+      return res
+        .status(404)
+        .json({ success: false, message: 'Address not found' })
     }
-    user.addresses.pull(addressId);
-    await user.save();
+    user.addresses.pull(addressId)
+    await user.save()
 
-    res.status(200).json({ success: true, message: 'Address deleted successfully' });
+    res
+      .status(200)
+      .json({ success: true, message: 'Address deleted successfully' })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: error.message })
   }
 }
