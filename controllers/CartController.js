@@ -13,26 +13,25 @@ const Order = require('../models/Order');
  * Supports both anonymous and authenticated users.
  */
 exports.addToCart = async (req, res) => {
-  const { productId, quantity, price } = req.body;
+  const { productId, quantity, price, selectedVariant } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     return res.status(400).json({ message: 'Invalid product ID' });
   }
-
   try {
     if (req.user) {
       // authenticated user
-      let cart = await Cart.findOne({ user: req.user._id });
+      let cart = await Cart.findOne({ user: req.user.id });
       if (!cart) {
-        cart = new Cart({ user: req.user._id, items: [] });
+        cart = await Cart.create({ user: req.user.id, items: [] });
       }
-
       const existingItem = cart.items.find(item => item.product.toString() === productId);
       if (existingItem) {
         existingItem.quantity = parseInt(existingItem.quantity) + parseInt(quantity);
         existingItem.price = parseInt(existingItem.price) + parseInt(price)
+        existingItem.selectedVariant = selectedVariant
       } else {
-        cart.items.push({ product: productId, quantity, price });
+        cart.items.push({ product: productId, quantity, price, selectedVariant });
       }
 
       await cart.save();
@@ -66,8 +65,31 @@ exports.getCart = async (req, res) => {
   try {
     if (req.user) {
       // Authenticated User: Retrieve cart from the database
-      const cart = await Cart.findOne({ user: req.user._id });
+      const cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image variants');
+
       res.status(200).json({ cart });
+    } else {
+      // Anonymous User: Retrieve cart from the session
+      res.status(200).json({ cart: req.session.cart });
+    }
+  } catch (error) {
+    res.status(500).json({ message: 'Error getting cart', error: error.message });
+  }
+}
+
+exports.getMiniCart = async (req, res) => {
+  try {
+    if (req.user) {
+      // Authenticated User: Retrieve cart from the database
+      const cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
+
+      const items = cart.items.map(item => ({
+        name: item.product.name,
+        price: item.product.price,
+        quantity: item.quantity,
+        image: item.product.image
+      }));
+      res.status(200).json({ items });
     } else {
       // Anonymous User: Retrieve cart from the session
       res.status(200).json({ cart: req.session.cart });
@@ -85,7 +107,7 @@ exports.clearCart = async (req, res) => {
   try {
     if (req.user) {
       // Authenticated User: Delete cart from the database
-      await Cart.findOneAndDelete({ user: req.user._id });
+      await Cart.findOneAndDelete({ user: req.user.id });
       res.status(200).json({ message: 'Cart cleared' });
     } else {
       // Anonymous User: Clear cart from the session
@@ -105,8 +127,13 @@ exports.removeItem = async (req, res) => {
   const { productId } = req.params;
 
   try {
+    const existingItem = await Cart.findOne({ user: req.user.id, items: { $elemMatch: { product: productId } } })
+    if (!existingItem) {
+      return res.status(400).json({ message: 'Product not found' });
+    }
+
     if (req.user) {
-      const cart = await Cart.findOne({ user: req.user._id });
+      const cart = await Cart.findOne({ user: req.user.id });
       cart.items = cart.items.filter(
         (item) => item.product.toString() !== productId
       );
@@ -124,7 +151,7 @@ exports.removeItem = async (req, res) => {
       res.status(200).json({ message: 'Item removed from cart', cart });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Error removing item from cart', error });
+    res.status(500).json({ message: 'Error removing item from cart', error: error.message });
   }
 }
 
@@ -134,7 +161,7 @@ exports.applyCoupon = async (req, res) => {
     // find cart
     let cart
     if (req.user) {
-      cart = await Cart.findOne({ user: req.user._id });
+      cart = await Cart.findOne({ user: req.user.id });
     } else {
       // Initialize cart structure if not present
       if (!req.session.cart) {
@@ -183,7 +210,7 @@ exports.removeCoupon = async (req, res) => {
   try {
     let cart
     if (req.user) {
-      cart = await Cart.findOne({ user: req.user._id });
+      cart = await Cart.findOne({ user: req.user.id });
       cart.coupons = cart.coupons.filter(id => id.toString() !== couponId);
       await cart.save();
     } else {
@@ -208,11 +235,16 @@ exports.removeCoupon = async (req, res) => {
 
 // Create a new user when checkout but not login
 exports.checkout = async (req, res) => {
-  const { lastName, firstName, email, address, selectedItems } = req.body
+  const { firstName, lastName, email, address, selectedItemIds } = req.body
+  if (!selectedItemIds) {
+    return res.status(400).json({ message: 'No items selected' })
+  }
+  let identifyUserFlag = ''
   try {
     let user = await User.findOne({ email })
-
+    // if user not found, create a new user
     if (!user) {
+      identifyUserFlag = 'anonymous'
       const randomPassword = crypto.randomBytes(10).toString('hex').slice(0, 8)
       const hashedPassword = await bcrypt.hash(randomPassword, 10)
       user = await User.create({ lastName, firstName, email, address, password: hashedPassword })
@@ -237,14 +269,16 @@ exports.checkout = async (req, res) => {
       await sendEmail(email, subject, htmlContent)
     } else {
       if (!req.user) {
+        identifyUserFlag = 'not-logged-in'
         return res.status(401).json({ message: 'User already exists. Please log in to use your cart' })
       }
+      identifyUserFlag = 'logged-in'
     }
 
     // find cart
     let cart
     if (req.user)
-      cart = await Cart.findOne({ user: req.user._id })
+      cart = await Cart.findOne({ user: req.user.id })
     else
       cart = await Cart.findOne({ sessionId: req.session.id })
 
@@ -257,23 +291,35 @@ exports.checkout = async (req, res) => {
 
     // calculate total
     cart.originalTotal = cartItems.reduce((acc, item) => acc + item.price, 0)
-
+    console.log('cart.originalTotal', cart.originalTotal)
     // apply coupon
     const coupons = cart.coupons
     let discount = 0
     if (coupons.length > 0) {
-      discount = coupons.reduce((acc, coupon) => acc + coupon.discountPercentage, 0)
-      cart.total = cart.originalTotal - (cart.originalTotal * discount / 100)
+      discount = coupons.map(async (coupon) => {
+        const couponObj = await Coupon.findById(coupon)
+        return Number(couponObj.discountPercentage)
+      })
+      discount = await Promise.all(discount)
+    }
+    // Ensure discount does not exceed original total
+    console.log('discount', discount)
+    // calculate total after discount
+    cart.total = cart.originalTotal - (cart.originalTotal * discount / 100)
+    console.log('cart.total', cart.total)
+    if (isNaN(cart.total)) {
+      cart.total = cart.originalTotal
     }
 
+    // only add selected items to order
+    const selectedItems = cartItems.filter(item => selectedItemIds.includes(item.product.toString()))
+    if (selectedItems.length === 0) {
+      return res.status(400).json({ message: 'No items selected' })
+    }
     // create order
     const order = await Order.create({
       user: user._id,
-      items: cartItems.map(item => ({
-        product: item.productId,
-        quantity: item.quantity,
-        price: item.price
-      })),
+      items: selectedItems,
       discount: discount, // percentage
       total: cart.total,
       shippingAddress: address,
@@ -284,10 +330,12 @@ exports.checkout = async (req, res) => {
     await user.save()
 
     if (req.user) {
-      cart.items = cart.items.filter(item => !selectedItems.includes(item.product.toString()))
+      cart.items = cart.items.filter(item => !selectedItemIds.includes(item.product.toString()))
+      cart.discount = 0
+      cart.total = 0
       await cart.save()
     } else {
-      req.session.cart = []
+      req.session.cart = { items: [], coupons: [], discount: 0, total: 0 }
     }
 
     res.status(200).json({ message: 'Order placed successfully, Please check your email to verify your account and complete the purchase.', order })

@@ -1,34 +1,50 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 
-function authOptional(req, res, next) {
-  const token = req.header('Authorization')?.replace('Bearer ', '');
-  if (!token) {
-    return next(); // Proceed without attaching user
-  }
-
+// Auth Middleware: Requires a valid token
+const auth = (req, res, next) => {
   try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = verified;
-  } catch (err) {
-    console.log('Token invalid, proceeding without attaching user')
-  }
-  next();
-}
-
-const auth = async (req, res, next) => {
-  try {
-    const token = req.header('Authorization').replace('Bearer ', '');
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    if (!user) {
-      throw new Error();
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
     }
-    req.user = user;
+
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    req.user = decoded; // Attach user information to the request object
+    // console.log('req.user', req.user);
     next();
   } catch (error) {
-    res.status(401).json({ success: false, message: 'Unauthorized' });
+    res.status(401).json({ success: false, message: 'Unauthorized: Invalid token' });
   }
 };
 
-module.exports = { auth, authOptional };
+// admin middleware
+const admin = (req, res, next) => {
+  console.log('req.user', req.user);
+  if (req.user && req.user.role === 'admin') {
+    next();
+  } else {
+    res.status(401).json({ success: false, message: 'Unauthorized: Admin only' });
+  }
+}
+
+// Auth Optional Middleware: Allows access with or without a token
+const authOptional = (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = decoded; // Attach user information if token is valid
+    }
+
+    next(); // Proceed regardless of token presence or validity
+  } catch (error) {
+    // Proceed without attaching user information
+    next();
+  }
+};
+
+module.exports = { auth, admin, authOptional };

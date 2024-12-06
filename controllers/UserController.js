@@ -1,18 +1,24 @@
 const bcrypt = require('bcrypt')
-const { parseIdentifier } = require('../utils/identifierHelper')
 const User = require('../models/User')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const crypto = require('crypto')
+const { uploadToS3 } = require('../utils/s3Upload')
 
 exports.getProfileById = async (req, res) => {
   try {
-    const userId = req.user.id
-
-    // Find the user by ID from the database
-    const user = await User.findById(userId)
-
-    // If user is not found, return a 404 error
+    const userId = req.user.id;
+    const updateData = req.body
+    const image = req.file
+    let fileName = null
+    if (image) {
+      fileName = `${Date.now()}_${image.originalname}`;
+      await uploadToS3(image.buffer, fileName, image.mimetype);
+    }
+    if (fileName) {
+      updateData.image = fileName;
+    }
+    const user = await User.findByIdAndUpdate(userId, updateData, { new: true });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' })
     }
@@ -41,16 +47,10 @@ exports.updateProfile = async (req, res) => {
 }
 
 exports.changePassword = async (req, res) => {
-  const { identifier, oldPassword, newPassword } = req.body
-
-  // Determine if the identifier is an email or phone number
-  const { query, error } = parseIdentifier(identifier)
-  if (error) {
-    return res.status(error.status).json({ message: error.message })
-  }
-
+  const { oldPassword, newPassword } = req.body
+  const email = req.user.email
   try {
-    const user = await User.findOne(query)
+    const user = await User.findOne({ email })
     if (!user) {
       return res.status(404).json({ message: 'User not found' })
     }
@@ -84,7 +84,7 @@ exports.recoverPassword = async (req, res) => {
       token: crypto.randomBytes(32).toString('hex')
     })
 
-    const url = `${process.env.FRONTEND_URL}/reset-password/${user._id}/${token.token}`
+    const url = `${process.env.FRONTEND_URL}/recover-password/${user._id}/${token.token}`
     const subject = 'Reset Your Password'
     const htmlContent = `
       <h1>Hi ${user.firstName}!</h1>
@@ -125,7 +125,6 @@ exports.resetPassword = async (req, res) => {
     return res.status(500).json({ message: 'Server error' })
   }
 }
-
 // ==============================================================================
 //                            Addresses
 // ==============================================================================
@@ -143,16 +142,16 @@ exports.getAddresses = async (req, res) => {
 // User Action: User adds a new address.
 exports.addAddress = async (req, res) => {
   try {
-    const userId = req.user.id
-    const address = req.body
-
-    const user = await User.findById(userId)
-    user.addresses.push(address)
-    await user.save()
+    const userId = req.user.id;
+    const address = req.body;
+    const user = await User.findById(userId);
+    console.log('address', user.addresses);
+    user.addresses.push(address);
+    await user.save();
 
     res.status(200).json({ success: true, data: user.addresses })
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    res.status(500).json({ success: false, message: error.message });
   }
 }
 
