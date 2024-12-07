@@ -1,19 +1,19 @@
 const mongoose = require("mongoose");
 
 const variantSchema = mongoose.Schema({
-  color: String,    
-  size: String,
+  name: String,
   stock: Number,
 });
 
-const productSchema = mongoose.Schema({
+const productSchema = mongoose.Schema({ 
   name: String,
   price: Number,
   image: String,
   description: String,
   tags: [String],
-  categories: [String],
+  category: String,
   variants: [variantSchema],
+  totalSold: { type: Number, default: 0 },
 });
 
 productSchema.index({ name: 'text', price: 1 });

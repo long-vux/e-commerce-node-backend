@@ -1,5 +1,4 @@
 const Cart = require('../models/Cart');
-const Coupon = require('../models/Coupon');
 const mongoose = require('mongoose');
 const User = require('../models/User');
 const crypto = require('crypto');
@@ -7,56 +6,157 @@ const bcrypt = require('bcrypt');
 const VerifyToken = require('../models/VerifyToken');
 const sendEmail = require('../utils/sendEmail');
 const Order = require('../models/Order');
+const Product = require('../models/Product');
+const Coupon = require('../models/Coupon');
 
 /**
  * Adds an item to the cart.
  * Supports both anonymous and authenticated users.
  */
-exports.addToCart = async (req, res) => {
-  const { productId, quantity, price, selectedVariant } = req.body;
+exports.addToCart = async (req, res) => { 
+  if (req.user) console.log('User logged in - adding to cart') 
+  else console.log('Anonymous user - adding to cart')
 
+  const { productId, quantity, variant } = req.body;
+
+  // Validate Product ID
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     return res.status(400).json({ message: 'Invalid product ID' });
   }
+
+  // Fetch Product Details
+  const product = await Product.findById(productId);
+  if (!product) {
+    return res.status(400).json({ message: 'Product not found' });
+  }     
+
+  const price = product.price * parseInt(quantity, 10);
+
+  // Check Stock for the Selected Variant
+  const stock = product.variants.find(v => v.name === variant)?.stock;
+  if(!stock) {
+    return res.status(400).json({ message: 'Variant not found' });
+  } else if (stock < quantity) {
+    return res.status(400).json({ message: 'Insufficient stock' });
+  }
+
   try {
     if (req.user) {
-      // authenticated user
-      let cart = await Cart.findOne({ user: req.user.id });
+      // =======================
+      // Authenticated User Flow
+      // =======================
+      
+      // Fetch or Create Cart for the User
+      let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
       if (!cart) {
         cart = await Cart.create({ user: req.user.id, items: [] });
       }
-      const existingItem = cart.items.find(item => item.product.toString() === productId);
+
+      // Check if the Product with the Same Variant Exists in the Cart
+      let existingItem = cart.items.find(item => 
+        item.product && 
+        item.product._id.toString() === productId && 
+        item.variant === variant
+      );
+
       if (existingItem) {
-        existingItem.quantity = parseInt(existingItem.quantity) + parseInt(quantity);
-        existingItem.price = parseInt(existingItem.price) + parseInt(price)
-        existingItem.selectedVariant = selectedVariant
+        // Update Quantity and Price if Item Exists
+        existingItem.quantity = parseInt(existingItem.quantity, 10) + parseInt(quantity, 10);
+        existingItem.price = parseFloat(existingItem.price) + price;
       } else {
-        cart.items.push({ product: productId, quantity, price, selectedVariant });
+        // Add New Item to the Cart
+        cart.items.push({ product: productId, quantity, price, variant });
       }
 
+      // Save the Updated Cart
       await cart.save();
-      res.status(200).json({ message: 'Item added to cart', cart });
+
+      // Re-populate to Ensure Product Details are Included
+      cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
+
+      // Respond with the Updated Cart
+      return res.status(200).json({ message: 'Item added to cart', cart });
+
     } else {
-      console.log('req.session.cart', req.session.cart)
-      if (!req.session.cart) {
-        req.session.cart = { items: [], coupons: [] };
+      // =========================
+      // Anonymous User Flow
+      // =========================
+
+      // Initialize Cart in Session if It Doesn't Exist
+      if (!req.session.cart || !req.session.cart.items) {
+        req.session.cart = { items: [], coupon: null };
       }
 
-      const existingItem = req.session.cart.items.find(item => item.product.toString() === productId);
+      let cart = req.session.cart;
+
+      // Check if the Product with the Same Variant Exists in the Cart
+      let existingItem = cart.items.find(item => {
+        // Handle Both Populated and Unpopulated Product Fields
+        if (item.product) {
+          if (typeof item.product === 'string' || item.product instanceof mongoose.Types.ObjectId) {
+            return item.product.toString() === productId && item.variant === variant;
+          } else if (item.product._id) {
+            return item.product._id.toString() === productId && item.variant === variant;
+          }
+        }
+        return false;
+      });
+
       if (existingItem) {
-        existingItem.quantity = parseInt(existingItem.quantity) + parseInt(quantity);
-        existingItem.price = parseInt(existingItem.price) + parseInt(price)
+        // Update Quantity and Price if Item Exists
+        existingItem.quantity = parseInt(existingItem.quantity, 10) + parseInt(quantity, 10);
+        existingItem.price = parseFloat(existingItem.price) + price;
       } else {
-        req.session.cart.items.push({ product: productId, quantity, price });
+        // Add New Item to the Cart
+        cart.items.push({ product: productId, quantity, price, variant });
       }
 
-      res.status(200).json({ message: 'Item added to cart', cart: req.session.cart });
+      // Save the Updated Cart Back to Session
+      req.session.cart = cart;
+
+      // Ensure Session is Saved Before Proceeding
+      await new Promise((resolve, reject) => {
+        req.session.save(err => {
+          if (err) {
+            console.log('Error saving session:', err);
+            return reject(err);
+          }
+          resolve();
+        });
+      });
+
+      // Fetch Product Details for All Items in the Cart
+      const populatedItems = await Product.find({
+        _id: { $in: cart.items.map(item => item.product) }
+      }, 'name price image');
+
+      // Prepare the Response Cart with Populated Product Details
+      const responseCart = {
+        items: cart.items.map(item => {
+          const productDetail = populatedItems.find(p => p._id.toString() === item.product.toString());
+          return {
+            product: productDetail ? {
+              _id: productDetail._id,
+              name: productDetail.name, 
+              price: productDetail.price,
+              image: productDetail.image
+            } : null, // Handle Missing Products Gracefully
+            quantity: item.quantity,
+            price: item.price,
+            variant: item.variant
+          };
+        }),
+        coupon: cart.coupon || null
+      };
+
+      // Respond with the Updated Cart
+      return res.status(200).json({ message: 'Item added to cart', cart: responseCart });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Error adding item to cart', error: error.message });
+    console.error('Error adding item to cart:', error);
+    return res.status(500).json({ message: 'Error adding item to cart', error: error.message });
   }
 }
-
 /**
  * Retrieves the cart items.
  * Supports both anonymous and authenticated users.
@@ -64,20 +164,97 @@ exports.addToCart = async (req, res) => {
 exports.getCart = async (req, res) => {
   try {
     if (req.user) {
-      // Authenticated User: Retrieve cart from the database
-      const cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image variants');
+      // =======================
+      // Authenticated User Flow
+      // =======================
 
-      res.status(200).json({ cart });
+      // Retrieve cart from the database with populated product details
+      let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
+
+      if (!cart) {
+        // If no cart exists for the user, respond with an empty cart
+        return res.status(200).json({ cart: { items: [], coupon: null } });
+      }
+
+      // Ensure all products are populated
+      cart.items = cart.items.map(item => {
+        if (!item.product) {
+          console.warn(`Product with ID ${item.product} not found for user ${req.user.id}.`);
+          return {
+            ...item,
+            product: null // You can choose to handle this differently
+          };
+        }
+        return item;
+      });
+
+      return res.status(200).json({ cart });
     } else {
-      // Anonymous User: Retrieve cart from the session
-      res.status(200).json({ cart: req.session.cart });
+      // =========================
+      // Anonymous User Flow
+      // =========================
+
+      // Retrieve cart from the session
+      let cart = req.session.cart;
+
+      // If no cart exists in the session, respond with an empty cart
+      if (!cart || !cart.items) {
+        return res.status(200).json({ cart: { items: [], coupon: null } });
+      }
+
+      // Extract all product IDs from the cart items
+      const productIds = cart.items.map(item => item.product);
+
+      // Fetch product details from the database
+      const populatedProducts = await Product.find(
+        { _id: { $in: productIds } },
+        'name price image'
+      );
+
+      // Create a map for quick lookup of product details
+      const productMap = {};
+      populatedProducts.forEach(product => {
+        productMap[product._id.toString()] = product;
+      });
+
+      // Prepare the response cart with populated product details
+      const responseCart = {
+        items: cart.items.map(item => {
+          const productDetail = productMap[item.product.toString()];
+          if (!productDetail) {
+            console.warn(`Product with ID ${item.product} not found in the database.`);
+            return {
+              ...item,
+              product: null // You can choose to handle this differently
+            };
+          }
+          return {
+            product: {
+              _id: productDetail._id,
+              name: productDetail.name,
+              price: productDetail.price,
+              image: productDetail.image
+            },
+            quantity: item.quantity,
+            price: item.price,
+            variant: item.variant
+          };
+        }),
+        coupon: cart.coupon || null
+      };
+
+      return res.status(200).json({ cart: responseCart });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Error getting cart', error: error.message });
+    console.error('Error retrieving cart:', error);
+    return res.status(500).json({ message: 'Error getting cart', error: error.message });
   }
 }
 
 exports.getMiniCart = async (req, res) => {
+  if (req.user) console.log('user login get mini cart') 
+  else console.log('anonymous get mini cart')
+
   try {
     if (req.user) {
       // Authenticated User: Retrieve cart from the database
@@ -87,15 +264,97 @@ exports.getMiniCart = async (req, res) => {
         name: item.product.name,
         price: item.product.price,
         quantity: item.quantity,
-        image: item.product.image
+        image: item.product.image,
+        variant: item.variant
       }));
       res.status(200).json({ items });
     } else {
       // Anonymous User: Retrieve cart from the session
-      res.status(200).json({ cart: req.session.cart });
+      const cart = req.session.cart
+
+      const products = await Product.find({ _id: { $in: cart?.items?.map(item => item.product) } })
+      if (cart && cart.items) {
+        // Assuming session.cart.items has productId, name, price, quantity, image, variant
+        items = cart.items.map(item => ({
+          name: products.find(p => p._id.toString() === item.product.toString()).name,
+          price: products.find(p => p._id.toString() === item.product.toString()).price,
+          quantity: item.quantity,
+          image: products.find(p => p._id.toString() === item.product.toString()).image,
+          variant: item.variant
+        }));
+      }
+      res.status(200).json({ items });
     }
   } catch (error) {
     res.status(500).json({ message: 'Error getting cart', error: error.message });
+  }
+}
+
+exports.getSelectedItems = async (req, res) => {
+  let selectedItems = []
+  if (req.user) {
+    selectedItems = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image')
+  } else {
+    selectedItems = req.session.cart
+  }
+  if (!selectedItems) {
+    return res.status(400).json({ message: 'Cart not found' })
+  }
+  res.status(200).json({ items: selectedItems.items })
+}
+
+exports.updateItem = async (req, res) => {
+  try {
+    const { productId, variant, quantity } = req.body
+
+    // Input Validation
+    if (!productId || !variant || typeof quantity !== 'number') {
+      return res.status(400).json({ message: 'Invalid input data' })
+    }
+
+    if (quantity < 1) {
+      return res.status(400).json({ message: 'Quantity must be at least 1' })
+    }
+
+    // Find the user's cart
+    const cart = await Cart.findOne({ user: req.user.id })
+
+    if (!cart) {
+      return res.status(404).json({ message: 'Cart not found' })
+    }
+
+    // Find the specific item in the cart
+    const itemIndex = cart.items.findIndex(
+      (item) =>
+        item.product.toString() === productId && item.variant === variant
+    )
+
+    if (itemIndex === -1) {
+      return res.status(404).json({ message: 'Item not found in cart' })
+    }
+
+    // Optionally, fetch the latest product price from the Products collection
+    // to prevent price manipulation from the frontend
+    const product = await Product.findById(productId)
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found' })
+    }
+
+    // Update quantity and price
+    cart.items[itemIndex].quantity = quantity
+    cart.items[itemIndex].price = product.price * quantity
+
+    // Save the updated cart
+    await cart.save()
+
+    return res.status(200).json({
+      message: 'Item updated successfully',
+      cart,
+    })
+  } catch (error) {
+    console.error('Error updating cart item:', error)
+    return res.status(500).json({ message: 'Server error' })
   }
 }
 
@@ -111,11 +370,11 @@ exports.clearCart = async (req, res) => {
       res.status(200).json({ message: 'Cart cleared' });
     } else {
       // Anonymous User: Clear cart from the session
-      req.session.cart = [];
+      req.session.cart = null
       res.status(200).json({ message: 'Cart cleared' });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Error clearing cart', error: error.message });
+    res.status(500).json({ message: 'Error clearing cart' });
   }
 }
 
@@ -124,36 +383,77 @@ exports.clearCart = async (req, res) => {
  * Supports both anonymous and authenticated users.
  */
 exports.removeItem = async (req, res) => {
-  const { productId } = req.params;
+  const { productId, variant } = req.body; // variant is the name of the variant
+
+  if (!productId || !variant) {
+    return res.status(400).json({ message: 'Product ID and variant are required' });
+  }
 
   try {
-    const existingItem = await Cart.findOne({ user: req.user.id, items: { $elemMatch: { product: productId } } })
-    if (!existingItem) {
-      return res.status(400).json({ message: 'Product not found' });
-    }
-
     if (req.user) {
+      // =======================
+      // Authenticated User Flow
+      // =======================
+      
       const cart = await Cart.findOne({ user: req.user.id });
-      cart.items = cart.items.filter(
-        (item) => item.product.toString() !== productId
-      );
-      await cart.save();
-      res.status(200).json({ message: 'Item removed from cart', cart });
-    } else {
-      let cart = req.session.cart
-      cart.items = cart.items.filter(item => item.product.toString() !== productId);
-
-      // if cart is empty, set it to empty object (have items and coupons to avoid undefined)
-      if (cart.items.length === 0) {
-        req.session.cart = { items: [], coupons: [] };
+      if (!cart) {
+        return res.status(404).json({ message: 'Cart not found' });
       }
 
-      res.status(200).json({ message: 'Item removed from cart', cart });
+      const itemIndex = cart.items.findIndex(
+        (item) => item.product.toString() === productId && item.variant === variant
+      );
+
+      if (itemIndex === -1) {
+        return res.status(404).json({ message: 'Item not found in cart' });
+      }
+
+      // Remove the item from the cart
+      cart.items.splice(itemIndex, 1);
+      await cart.save();
+
+      return res.status(200).json({ message: 'Item removed from cart', cart });
+    } else {
+      // =========================
+      // Anonymous User Flow
+      // =========================
+
+      if (!req.session.cart || !Array.isArray(req.session.cart.items)) {
+        return res.status(404).json({ message: 'Cart not found' });
+      }
+
+      const cart = req.session.cart;
+      const initialLength = cart.items.length;
+
+      cart.items = cart.items.filter(
+        (item) => !(item.product.toString() === productId && item.variant === variant)
+      );
+
+      if (cart.items.length === initialLength) {
+        return res.status(404).json({ message: 'Item not found in cart' });
+      }
+
+      // If the cart is empty after removal, reset it
+      if (cart.items.length === 0) {
+        req.session.cart = { items: [], coupons: [] };
+      } else {
+        req.session.cart = cart;
+      }
+
+      // Save the session
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session save error:', err);
+          return res.status(500).json({ message: 'Error saving session', error: err.message });
+        }
+        return res.status(200).json({ message: 'Item removed from cart', cart: req.session.cart });
+      });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Error removing item from cart', error: error.message });
+    console.error('Error removing item from cart:', error);
+    return res.status(500).json({ message: 'Error removing item from cart', error: error.message });
   }
-}
+};
 
 exports.applyCoupon = async (req, res) => {
   const { couponId } = req.body;
@@ -165,12 +465,12 @@ exports.applyCoupon = async (req, res) => {
     } else {
       // Initialize cart structure if not present
       if (!req.session.cart) {
-        req.session.cart = { items: [], coupons: [] };
+        req.session.cart = { items: [], coupon: null };
       }
       cart = req.session.cart;
     }
     if (!cart)
-      return res.status(400).json({ message: 'Cart not found', error: error.message });
+      return res.status(400).json({ message: 'Cart not found' });
     // find coupon
     const coupon = await Coupon.findOne({ _id: couponId, isActive: true });
     if (!coupon) {
@@ -179,54 +479,53 @@ exports.applyCoupon = async (req, res) => {
 
     if (req.user) {
       // Apply coupon for authenticated user
-      if (!cart.coupons) {
-        cart.coupons = [];
+      if (!cart.coupon) {
+        cart.coupon = null;
       }
-      if (cart.coupons.includes(couponId)) {
+      if (cart.coupon === couponId) {
         return res.status(400).json({ message: 'Coupon already applied', cart });
       }
-      cart.coupons.push(couponId);
+      cart.coupon = couponId;
       await cart.save();
     } else {
       // Apply coupon for anonymous user
-      if (!cart.coupons) {
-        cart.coupons = [];
+      if (!cart.coupon) {
+        cart.coupon = null;
       }
-      if (cart.coupons.includes(couponId)) {
+      if (cart.coupon === couponId) {
         return res.status(400).json({ message: 'Coupon already applied', cart });
       }
-      cart.coupons.push(couponId);
+      cart.coupon = couponId;
       req.session.cart = cart; // Save the updated cart back to session
     }
 
-    res.status(200).json({ message: 'Coupon applied', cart });
+    res.status(200).json({ message: 'Coupon applied', cart: await cart.populate('coupon') });
   } catch (error) {
     res.status(500).json({ message: 'Error applying coupon', error: error.message });
   }
 }
 
 exports.removeCoupon = async (req, res) => {
-  const { couponId } = req.params;
   try {
     let cart
     if (req.user) {
       cart = await Cart.findOne({ user: req.user.id });
-      cart.coupons = cart.coupons.filter(id => id.toString() !== couponId);
+      cart.coupon = null;
       await cart.save();
     } else {
       cart = req.session.cart;
       if (!cart) {
-        cart = { items: [], coupons: [] };
+        cart = { items: [], coupon: null };
       }
 
-      cart.coupons = cart.coupons.filter(id => id.toString() !== couponId);
+      cart.coupon = null;
       req.session.cart = cart;
     }
 
     if (!cart)
       return res.status(400).json({ message: 'Cart not found' });
 
-    cart.coupons = cart.coupons.filter(id => id.toString() !== couponId);
+    cart.coupon = null;
     res.status(200).json({ message: 'Coupon removed from cart', cart });
   } catch (error) {
     res.status(500).json({ message: 'Error removing coupon from cart', error: error.message });
@@ -235,8 +534,8 @@ exports.removeCoupon = async (req, res) => {
 
 // Create a new user when checkout but not login
 exports.checkout = async (req, res) => {
-  const { firstName, lastName, email, address, selectedItemIds } = req.body
-  if (!selectedItemIds) {
+  const { firstName, lastName, email, address, selectedItems } = req.body // selectedItems is an array of objects with productId and variant
+  if (!selectedItems) {
     return res.status(400).json({ message: 'No items selected' })
   }
   let identifyUserFlag = ''
@@ -280,46 +579,37 @@ exports.checkout = async (req, res) => {
     if (req.user)
       cart = await Cart.findOne({ user: req.user.id })
     else
-      cart = await Cart.findOne({ sessionId: req.session.id })
+      cart = req.session.cart
 
     if (!cart)
       return res.status(400).json({ message: 'Cart not found' })
 
-    const cartItems = cart.items
-    if (cartItems.length === 0)
+    if (cart.items.length === 0)
       return res.status(400).json({ message: 'Your cart is empty' })
 
-    // calculate total
-    cart.originalTotal = cartItems.reduce((acc, item) => acc + item.price, 0)
-    console.log('cart.originalTotal', cart.originalTotal)
+    // get selected items from cart
+    const selectedCartItems = cart.items.filter(item => selectedItems.some(selectedItem => selectedItem.productId === item.product.toString() && selectedItem.variant === item.variant))
+
+    if (selectedCartItems.length === 0)
+      return res.status(400).json({ message: 'No items selected' })
+
+    // calculate total of selected items
+    cart.total = selectedCartItems.reduce((acc, item) => acc + item.price, 0)
     // apply coupon
-    const coupons = cart.coupons
+    const coupon = cart.coupon
     let discount = 0
-    if (coupons.length > 0) {
-      discount = coupons.map(async (coupon) => {
-        const couponObj = await Coupon.findById(coupon)
-        return Number(couponObj.discountPercentage)
-      })
-      discount = await Promise.all(discount)
+    if (coupon) {
+      const couponObj = await Coupon.findById(coupon)
+      discount = Number(couponObj.discountPercentage)
     }
     // Ensure discount does not exceed original total
-    console.log('discount', discount)
     // calculate total after discount
-    cart.total = cart.originalTotal - (cart.originalTotal * discount / 100)
-    console.log('cart.total', cart.total)
-    if (isNaN(cart.total)) {
-      cart.total = cart.originalTotal
-    }
+    cart.total -= (cart.total * discount / 100)
 
-    // only add selected items to order
-    const selectedItems = cartItems.filter(item => selectedItemIds.includes(item.product.toString()))
-    if (selectedItems.length === 0) {
-      return res.status(400).json({ message: 'No items selected' })
-    }
     // create order
     const order = await Order.create({
       user: user._id,
-      items: selectedItems,
+      items: selectedCartItems,
       discount: discount, // percentage
       total: cart.total,
       shippingAddress: address,
@@ -328,18 +618,59 @@ exports.checkout = async (req, res) => {
 
     user.orders.push(order._id)
     await user.save()
-
     if (req.user) {
-      cart.items = cart.items.filter(item => !selectedItemIds.includes(item.product.toString()))
+      cart.items = cart.items.filter(item => !selectedCartItems.some(selectedItem => selectedItem.product.toString() === item.product.toString() && selectedItem.variant === item.variant))
       cart.discount = 0
       cart.total = 0
+      cart.coupon = null
       await cart.save()
     } else {
-      req.session.cart = { items: [], coupons: [], discount: 0, total: 0 }
+      req.session.cart = { items: [], coupon: null, discount: 0, total: 0 }
     }
 
-    res.status(200).json({ message: 'Order placed successfully, Please check your email to verify your account and complete the purchase.', order })
+    // send email to user to thank them for their purchase
+    const url = `${process.env.FRONTEND_URL}`
+    const subject = 'Thank you for your purchase!'
+    const htmlContent = `
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; border-radius: 5px;">
+      <h1 style="text-align: center; font-size: 24px; font-weight: bold;">Welcome to MADNESS!</h1>
+      <p>Thank you for your purchase!</p>    
+      <p>Your order has been placed successfully.</p>
+      <p style="font-weight: bold;">Here are the details of your order:</p>
+      <table>
+        <tr>
+          <th>Product</th>
+          <th>Variant</th>
+          <th>Quantity</th>
+          <th>Price</th>
+        </tr>
+        ${selectedCartItems.map((item) => {
+          const productName = item.product.name
+          const variant = item.variant
+          const quantity = item.quantity
+          const price = item.price
+          return `
+            <tr>
+              <td>${productName}</td>
+              <td>${variant}</td>x
+              <td>${quantity}</td>
+              <td>${price}</td>
+            </tr>
+          `
+        }).join('')}
+        <tr>
+          <td colspan="3" style="text-align: right; font-weight: bold;">Total:</td>
+          <td>${cart.total}</td>
+        </tr>
+      </table>
+      <p>Best regards,<br/>MADNESS Team</p>
+      <p>You can view your order details <a href="${url}">here</a></p>
+    </div>
+    `
+    await sendEmail(email, subject, htmlContent)
+
+    res.status(200).json({ message: 'Order placed successfully. Please check your email for order details.', order })
   } catch (error) {
-    return res.status(500).json({ message: 'Error processing checkout', error: error.message })
+    return res.status(500).json({ message: 'Error processing checkout' })
   }
 }

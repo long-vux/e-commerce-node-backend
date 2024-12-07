@@ -35,10 +35,10 @@ const getFromS3 = async (fileName) => {
     Key: fileName,
   };
   const command = new GetObjectCommand(params);
-  const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+  const url = await getSignedUrl(s3Client, command, { expiresIn: 5 * 60 * 60 });
   return url;
 };
-
+  
 /**
  * Deletes a file from AWS S3.
  * @param {string} fileName - The name of the file.

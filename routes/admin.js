@@ -5,7 +5,6 @@ const AdminController = require('../controllers/AdminController')
 const upload = require('../middleware/multer')
 const { auth } = require('../middleware/authMiddleware')
 
-
 // ================================= User ================================
 router.get('/', auth, admin, AdminController.getUsers)
 router.put('/:userId/ban', auth, admin, AdminController.banUser)
@@ -16,9 +15,6 @@ router.get('/orders', auth, admin, AdminController.getOrdersPaginated)
 
 // ================================= Revenue ================================
 router.get('/revenue', auth, admin, AdminController.getRevenue)
-
-// ================================= Best Selling Products ================================
-router.get('/best-selling-products', auth, admin, AdminController.getBestSellingProducts)
 
 // ================================= Product ================================
 router.post('/add-product', auth, admin, upload.single('image'), AdminController.addProduct)

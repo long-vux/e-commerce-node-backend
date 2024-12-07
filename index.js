@@ -4,7 +4,7 @@ const bodyParser = require("body-parser");
 const connectDB = require("./config/db");
 const dotenv = require("dotenv");
 const MongoStore = require('connect-mongo');
-const multer = require('multer');
+const session = require("express-session");
 
 // Import Routes
 const authRoutes = require("./routes/auth");
@@ -15,7 +15,6 @@ const couponRoutes = require("./routes/coupon");
 const userRoutes = require("./routes/user");
 const orderRoutes = require("./routes/order");  
 
-const session = require("express-session");
 dotenv.config();
 const app = express();
 connectDB();
@@ -27,15 +26,22 @@ app.use(cors({
   credentials: true,
 }));
 
-const upload = multer({ dest: 'uploads/' });
 
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'secret',
   resave: false,
   saveUninitialized: true,
   store: MongoStore.create({ mongoUrl: process.env.MONGO_URI }),
-  cookie: { maxAge: 1000 * 60 * 60 * 24 } // 1 day
+  cookie: { 
+    maxAge: 1000 * 60 * 60 * 24, // 1 day
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production', // Set to true in production
+    sameSite: 'lax',
+   } 
 }));
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.use((req, res, next) => {
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');

@@ -7,6 +7,7 @@ const AddressSchema = new mongoose.Schema({
   street: { type: String },
   receiverName: { type: String },
   receiverPhone: { type: String },
+  deliveryCode: { type: String },
 }, { timestamps: true });
 
 const UserSchema = new mongoose.Schema({

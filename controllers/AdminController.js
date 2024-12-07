@@ -36,7 +36,6 @@ exports.banUser = async (req, res) => {
   }
 };
 
-
 // ==============================================================================
 //                            Orders
 // ==============================================================================
@@ -100,57 +99,6 @@ exports.getRevenue = async (req, res) => {
     res.status(500).json({ success: false, message: error.message })
   }
 }
-
-// best-selling products
-exports.getBestSellingProducts = async (req, res) => {
-  try {
-    const bestSelling = await Order.aggregate([
-      // Deconstruct the products array in each order
-      { $unwind: '$products' },
-      
-      // Group by product ID and calculate the total quantity sold
-      { 
-        $group: { 
-          _id: '$products.product', 
-          totalSold: { $sum: '$products.quantity' } 
-        } 
-      },
-      
-      // Sort the products by totalSold in descending order
-      { $sort: { totalSold: -1 } },
-      
-      // Optional: Limit the results to the top 10 best-selling products
-      { $limit: 10 },
-      
-      // Lookup to fetch product details from the Products collection
-      { 
-        $lookup: { 
-          from: 'products', 
-          localField: '_id', 
-          foreignField: '_id', 
-          as: 'productDetails' 
-        } 
-      },
-      
-      // Unwind the productDetails array to get object format
-      { $unwind: '$productDetails' },
-      
-      // Project the desired fields
-      { 
-        $project: { 
-          _id: 0,
-          productId: '$_id',
-          name: '$productDetails.name',
-          totalSold: 1  
-        } 
-      }
-    ]);
-
-    res.status(200).json({ success: true, data: bestSelling });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
 
 // ==============================================================================
 //                            Products

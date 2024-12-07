@@ -3,7 +3,7 @@ const User = require('../models/User')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const crypto = require('crypto')
-const { uploadToS3, getFromS3 } = require('../utils/s3Upload')
+const { uploadToS3 } = require('../utils/s3Upload')
 const jwt = require('jsonwebtoken')
 
 exports.updateProfile = async (req, res) => {
@@ -37,7 +37,8 @@ exports.updateProfile = async (req, res) => {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      phone: user.phone
+      phone: user.phone,
+      role: user.role || 'user'
     }
     if (fileName) { // get image from cloudfront
       payload.image = `${process.env.CLOUDFRONT_URL}${fileName}`;

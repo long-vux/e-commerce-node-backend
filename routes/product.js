@@ -1,29 +1,27 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const ProductController = require("../controllers/ProductController");
-const ReviewController = require("../controllers/ReviewController");
-const { auth } = require("../middleware/authMiddleware");
+const ProductController = require('../controllers/ProductController');
 
-// GET /api/product/search
-router.get("/search", ProductController.searchProducts);
+// **Define specific routes before parameterized routes**
+// Route to get best-selling products
+router.get('/best-selling-products', ProductController.getBestSellingProducts);
 
-// sort by price
-router.get("/sort-by-price", ProductController.sortByPrice);
+// Route to get all categories
+router.get('/categories', ProductController.getCategories);
 
-// GET /api/product
-router.get("/", ProductController.getAllProducts);
+// Route to get products by category
+router.get('/category/:category', ProductController.getProductsByCategory);
 
-// GET /api/product/:id
-router.get("/:id", ProductController.getProductById);
+// Route to search products
+router.get('/search', ProductController.searchProducts);
 
-// GET /api/product/category/:categoryId
-router.get("/category/:categoryId", ProductController.getProductsByCategory);
+// Route to sort products by price
+router.get('/sort-by-price', ProductController.sortByPrice);
 
-// Review Routes
-// POST /api/product/:id/reviews
-router.post("/:id/reviews", auth, ReviewController.addReview);
+// Route to get a product by ID
+router.get('/:id', ProductController.getProductById);
 
-// GET /api/product/:id/reviews
-router.get("/:id/reviews", ReviewController.getReviews);
+// Route to get all products
+router.get('/', ProductController.getAllProducts);
 
 module.exports = router;

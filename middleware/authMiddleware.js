@@ -20,6 +20,7 @@ const auth = (req, res, next) => {
 
 // admin middleware
 const admin = (req, res, next) => {
+  console.log('user role: ', req.user)
   if (req.user && req.user.role === 'admin') {
     next();
   } else {
@@ -36,6 +37,7 @@ const authOptional = (req, res, next) => {
       const token = authHeader.split(' ')[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = decoded; // Attach user information if token is valid
+      console.log('user login')
     }
 
     next(); // Proceed regardless of token presence or validity
