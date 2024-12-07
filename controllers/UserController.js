@@ -3,10 +3,10 @@ const User = require('../models/User')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const crypto = require('crypto')
-const { uploadToS3 } = require('../utils/s3Upload')
+const { uploadToS3, getFromS3 } = require('../utils/s3Upload')
 const jwt = require('jsonwebtoken')
 
-exports.getProfileById = async (req, res) => {
+exports.updateProfile = async (req, res) => {
   try {
     const email = req.user.email;
     const { firstName, lastName, phone } = req.body
@@ -29,7 +29,7 @@ exports.getProfileById = async (req, res) => {
 
     const user = await User.findOneAndUpdate({ email }, updateData, { new: true });
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' })
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     let payload = {
@@ -37,8 +37,7 @@ exports.getProfileById = async (req, res) => {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      phone: user.phone,
-      role: user.role || 'user'
+      phone: user.phone
     }
     if (fileName) { // get image from cloudfront
       payload.image = `${process.env.CLOUDFRONT_URL}${fileName}`;
@@ -49,23 +48,7 @@ exports.getProfileById = async (req, res) => {
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.status(200).json({ success: true, data: token });
   } catch (error) {
-    // Handle errors by returning a 500 server error
-    res.status(500).json({ success: false, message: error.message })
-  }
-}
-
-exports.updateProfile = async (req, res) => {
-  try {
-    const userId = req.user.id
-    const updateData = req.body
-    const user = await User.findByIdAndUpdate(userId, updateData, { new: true })
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' })
-    }
-
-    res.status(200).json({ success: true, data: user })
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    res.status(500).json({ success: false, message: error.message });
   }
 }
 
@@ -154,13 +137,13 @@ exports.resetPassword = async (req, res) => {
 
 exports.getAddresses = async (req, res) => {
   try {
-    const userId = req.user.id
-    const user = await User.findById(userId)
-    res.status(200).json({ success: true, data: user.addresses })
+    const userId = req.user.id;
+    const user = await User.findById(userId);
+    res.status(200).json({ success: true, data: user.addresses });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    res.status(500).json({ success: false, message: error.message });
   }
-}
+} 
 
 // User Action: User adds a new address.
 exports.addAddress = async (req, res) => {
@@ -172,7 +155,7 @@ exports.addAddress = async (req, res) => {
     user.addresses.push(address);
     await user.save();
 
-    res.status(200).json({ success: true, data: user.addresses })
+    res.status(200).json({ success: true, data: user.addresses });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -181,46 +164,40 @@ exports.addAddress = async (req, res) => {
 // User Action: User updates an existing address.
 exports.updateAddress = async (req, res) => {
   try {
-    const userId = req.user.id
-    const { addressId } = req.params
-    const updateData = req.body
-    const user = await User.findById(userId)
-    const address = user.addresses.id(addressId)
+    const userId = req.user.id;
+    const { addressId } = req.params;
+    const updateData = req.body;
+    const user = await User.findById(userId);
+    const address = user.addresses.id(addressId);
     if (!address) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Address not found' })
+      return res.status(404).json({ success: false, message: 'Address not found' });
     }
 
-    address.set(updateData)
-    await user.save()
+    address.set(updateData);
+    await user.save();
 
-    res.status(200).json({ success: true, data: address })
+    res.status(200).json({ success: true, data: address });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    res.status(500).json({ success: false, message: error.message });
   }
 }
 
 // User Action: User deletes an existing address.
-exports.deleteAddress = async (req, res) => {
+exports.deleteAddress = async (req, res) => { 
   try {
-    const userId = req.user.id
-    const { addressId } = req.params
+    const userId = req.user.id;
+    const { addressId } = req.params;
 
-    const user = await User.findById(userId)
-    const address = user.addresses.id(addressId)
+    const user = await User.findById(userId);
+    const address = user.addresses.id(addressId);
     if (!address) {
-      return res
-        .status(404)
-        .json({ success: false, message: 'Address not found' })
+      return res.status(404).json({ success: false, message: 'Address not found' });
     }
-    user.addresses.pull(addressId)
-    await user.save()
+    user.addresses.pull(addressId);
+    await user.save();
 
-    res
-      .status(200)
-      .json({ success: true, message: 'Address deleted successfully' })
+    res.status(200).json({ success: true, message: 'Address deleted successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message })
+    res.status(500).json({ success: false, message: error.message });
   }
 }

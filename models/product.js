@@ -7,12 +7,12 @@ const variantSchema = mongoose.Schema({
 
 const productSchema = mongoose.Schema({ 
   name: String,
-  price: Number,
-  image: String,
   description: String,
-  tags: [String],
+  price: Number,
   category: String,
+  tags: [String],
   variants: [variantSchema],
+  images: [String],
   totalSold: { type: Number, default: 0 },
 });
 

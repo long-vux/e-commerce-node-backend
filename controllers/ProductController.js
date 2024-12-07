@@ -1,14 +1,37 @@
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 
+
 exports.getAllProducts = async (req, res) => {
   try {
-    const products = await Product.find();
-    res.status(200).json({ success: true, data: products });
+    const products = await Product.find().lean();
+
+    const transformedProducts = products.map(product => {
+      if (product.images && Array.isArray(product.images)) {
+        product.images = product.images.map(image => `${process.env.CLOUDFRONT_URL}${image}`);
+      } else {
+        product.images = [];
+      }
+
+      if (product.variants && Array.isArray(product.variants)) {
+        product.variants = product.variants.map(variant => {
+          const [size, color] = variant.name.split(' - ');
+          return {
+            size: size,
+            color: color,
+            stock: variant.stock,
+          };
+        });
+      }
+
+      return product;
+    });
+
+    res.status(200).json({ success: true, data: transformedProducts });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
-}
+};
 
 exports.getProductById = async (req, res) => {
   try {
