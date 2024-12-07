@@ -17,7 +17,7 @@ router.get('/orders', auth, admin, AdminController.getOrdersPaginated)
 router.get('/revenue', auth, admin, AdminController.getRevenue)
 
 // ================================= Product ================================
-router.post('/add-product', auth, admin, upload.single('image'), AdminController.addProduct)
+router.post('/add-product', auth, admin, upload.array('images'), AdminController.addProduct)
 router.put("/:id", auth, admin, AdminController.updateProduct);
 router.delete("/:id", auth, admin, AdminController.deleteProduct);
 
