@@ -193,9 +193,28 @@ exports.updateProduct = async (req, res) => {
     }
 
     const currentImages = product.images;
-
+    let existingImagesArray;
+    if (typeof existingImages === 'string') {
+      try {
+        existingImagesArray = JSON.parse(existingImages);
+      } catch (e) {
+        return res.status(400).json({ success: false, message: 'Invalid existingImages format' });
+      }
+    } else if (Array.isArray(existingImages)) {
+      existingImagesArray = existingImages;
+    } else {
+      existingImagesArray = [];
+    }
     // Determine images to keep and delete
-    const imagesToKeep = Array.isArray(existingImages) ? existingImages : [];
+    const imagesToKeep = existingImagesArray.map(url => {
+      try {
+        const urlObj = new URL(url);
+        return urlObj.pathname.split('/').pop();
+      } catch (e) {
+        // If the URL is invalid, assume it's already a filename
+        return url.split('/').pop();
+      }
+    });
     const imagesToDelete = currentImages.filter(image => !imagesToKeep.includes(image));
 
     // Delete images not present in the new upload from S3
@@ -208,13 +227,15 @@ exports.updateProduct = async (req, res) => {
       for (const image of images) {
         const fileName = `${Date.now()}_${image.originalname}`;
         await uploadToS3(image.buffer, fileName, image.mimetype);
+        console.log(fileName)
         uploadedImages.push(fileName);
       }
+    
     }
 
     // Combine existing images with newly uploaded images
     const finalImages = [...imagesToKeep, ...uploadedImages];
-
+    console.log('final', finalImages)
     // Update the product with the new data
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
