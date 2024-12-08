@@ -2,9 +2,15 @@ const Order = require("../models/Order");
 const Product = require("../models/Product");
 
 const getOrdersOfUser = async (req, res) => {
-  const { user } = req.params;
+  const { id } = req.user;
   try {
-    const orders = await Order.find({ user });
+    const orders = await Order.find({ user: id }).populate('items.product', 'name price images').lean();
+    // add cloudFront url to images
+    orders.forEach(order => {
+      order.items.forEach(item => {
+        item.product.image = `${process.env.CLOUDFRONT_URL}${item.product.images[0]}`;
+      });
+    });
     res.status(200).json(orders);
   } catch (error) {
     res.status(500).json({ message: error.message });
