@@ -27,10 +27,14 @@ const getHistoryOfUser = async (req, res) => {
   }
 };
 
-const trackOrder = async (req, res) => {
+const getOrderDetails = async (req, res) => {
   const { id } = req.params;
   try {
-    const order = await Order.findById(id);
+    const order = await Order.findById(id).populate('items.product', 'name price images');
+    // add cloudFront url to images
+    order.items.forEach(item => {
+      item.product.images = item.product.images.map(image => `${process.env.CLOUDFRONT_URL}${image}`);
+    });
     res.status(200).json(order);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -77,7 +81,7 @@ const deleteOrder = async (req, res) => {
 module.exports = {
   getOrdersOfUser,
   getHistoryOfUser,
-  trackOrder,
+  getOrderDetails,
   updateOrder,
   deleteOrder
 };
