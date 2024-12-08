@@ -13,8 +13,9 @@ const Coupon = require('../models/Coupon');
  * Adds an item to the cart.
  * Supports both anonymous and authenticated users.
  */
-exports.addToCart = async (req, res) => { 
-  if (req.user) console.log('User logged in - adding to cart') 
+
+exports.addToCart = async (req, res) => {
+  if (req.user) console.log('User logged in - adding to cart')
   else console.log('Anonymous user - adding to cart')
 
   const { productId, quantity, variant } = req.body;
@@ -28,13 +29,14 @@ exports.addToCart = async (req, res) => {
   const product = await Product.findById(productId);
   if (!product) {
     return res.status(400).json({ message: 'Product not found' });
-  }     
+  }
 
   const price = product.price * parseInt(quantity, 10);
 
   // Check Stock for the Selected Variant
-  const stock = product.variants.find(v => v.name === variant)?.stock;
-  if(!stock) {
+  const stock = product.variants.find(v => v.name.trim().toLowerCase() === variant)?.stock;
+  console.log(product.variants)
+  if (!stock) {
     return res.status(400).json({ message: 'Variant not found' });
   } else if (stock < quantity) {
     return res.status(400).json({ message: 'Insufficient stock' });
@@ -45,7 +47,7 @@ exports.addToCart = async (req, res) => {
       // =======================
       // Authenticated User Flow
       // =======================
-      
+
       // Fetch or Create Cart for the User
       let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
       if (!cart) {
@@ -53,9 +55,9 @@ exports.addToCart = async (req, res) => {
       }
 
       // Check if the Product with the Same Variant Exists in the Cart
-      let existingItem = cart.items.find(item => 
-        item.product && 
-        item.product._id.toString() === productId && 
+      let existingItem = cart.items.find(item =>
+        item.product &&
+        item.product._id.toString() === productId &&
         item.variant === variant
       );
 
@@ -137,7 +139,7 @@ exports.addToCart = async (req, res) => {
           return {
             product: productDetail ? {
               _id: productDetail._id,
-              name: productDetail.name, 
+              name: productDetail.name,
               price: productDetail.price,
               image: productDetail.image
             } : null, // Handle Missing Products Gracefully
@@ -161,6 +163,11 @@ exports.addToCart = async (req, res) => {
  * Retrieves the cart items.
  * Supports both anonymous and authenticated users.
  */
+
+
+// Retrieve CloudFront URL from environment variables
+const cloudFrontUrl = process.env.CLOUDFRONT_URL || 'https://your-cloudfront-domain.cloudfront.net';
+
 exports.getCart = async (req, res) => {
   try {
     if (req.user) {
@@ -169,26 +176,37 @@ exports.getCart = async (req, res) => {
       // =======================
 
       // Retrieve cart from the database with populated product details
-      let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
+      let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price images');
 
       if (!cart) {
         // If no cart exists for the user, respond with an empty cart
         return res.status(200).json({ cart: { items: [], coupon: null } });
       }
 
-      // Ensure all products are populated
-      cart.items = cart.items.map(item => {
-        if (!item.product) {
-          console.warn(`Product with ID ${item.product} not found for user ${req.user.id}.`);
-          return {
-            ...item,
-            product: null // You can choose to handle this differently
-          };
+      // Create a map for quick lookup of product details
+      const productMap = {};
+      cart.items.forEach(item => {
+        if (item.product) {
+          productMap[item.product._id.toString()] = item.product;
         }
-        return item;
       });
 
-      return res.status(200).json({ cart });
+      // Prepare the response cart with populated product and variant details
+      const items = cart.items.map(item => {
+        const product = productMap[item.product._id.toString()];
+        console.log(product)
+        const image = product.images[0]
+        return {
+          name: product.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: `${process.env.CLOUDFRONT_URL}${image}`,
+          variant: item.variant,
+          _id: product._id
+        };
+      });
+
+      return res.status(200).json({ cart: { items, coupon: cart.coupon || null } });
     } else {
       // =========================
       // Anonymous User Flow
@@ -206,89 +224,135 @@ exports.getCart = async (req, res) => {
       const productIds = cart.items.map(item => item.product);
 
       // Fetch product details from the database
-      const populatedProducts = await Product.find(
+      const products = await Product.find(
         { _id: { $in: productIds } },
-        'name price image'
+        'name price images'
       );
 
       // Create a map for quick lookup of product details
       const productMap = {};
-      populatedProducts.forEach(product => {
+      products.forEach(product => {
         productMap[product._id.toString()] = product;
       });
 
-      // Prepare the response cart with populated product details
-      const responseCart = {
-        items: cart.items.map(item => {
-          const productDetail = productMap[item.product.toString()];
-          if (!productDetail) {
-            console.warn(`Product with ID ${item.product} not found in the database.`);
-            return {
-              ...item,
-              product: null // You can choose to handle this differently
-            };
-          }
-          return {
-            product: {
-              _id: productDetail._id,
-              name: productDetail.name,
-              price: productDetail.price,
-              image: productDetail.image
-            },
-            quantity: item.quantity,
-            price: item.price,
-            variant: item.variant
-          };
-        }),
-        coupon: cart.coupon || null
-      };
+      const items = cart.items.map(item => {
+        const product = productMap[item.product.toString()];
+        const image = product.images[0]
 
-      return res.status(200).json({ cart: responseCart });
+        return {
+          name: product.name,
+          price: item.price,
+          quantity: item.quantity,
+          image: `${cloudFrontUrl}/${image}`,
+          variant: item.variant
+        };
+      });
+
+      return res.status(200).json({ cart: { items, coupon: cart.coupon || null } });
     }
   } catch (error) {
     console.error('Error retrieving cart:', error);
     return res.status(500).json({ message: 'Error getting cart', error: error.message });
   }
-}
+};
 
 exports.getMiniCart = async (req, res) => {
-  if (req.user) console.log('user login get mini cart') 
-  else console.log('anonymous get mini cart')
+  if (req.user) console.log('User logged in - getting mini cart');
+  else console.log('Anonymous user - getting mini cart');
 
   try {
     if (req.user) {
-      // Authenticated User: Retrieve cart from the database
-      const cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
+      // =======================
+      // Authenticated User Flow
+      // =======================
 
-      const items = cart.items.map(item => ({
-        name: item.product.name,
-        price: item.product.price,
-        quantity: item.quantity,
-        image: item.product.image,
-        variant: item.variant
-      }));
+      // Retrieve cart from the database with populated product details
+      const cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price images variants');
+
+      if (!cart) {
+        // If no cart exists for the user, respond with an empty cart
+        return res.status(200).json({ items: [] });
+      }
+
+      // Create a map for quick lookup of product details
+      const productMap = {};
+      cart.items.forEach(item => {
+        if (item.product) {
+          productMap[item.product._id.toString()] = item.product;
+        }
+      });
+
+      // Prepare the items array with image URLs prepended by CloudFront URL
+      const items = cart.items.map(item => {
+        const product = productMap[item.product._id.toString()];
+        const image = product.images[0]
+
+        // Find the variant details using variant ID
+        const variantDetail = product.variants.id(item.variant);
+        const variantInfo = variantDetail ? `${variantDetail.size} - ${variantDetail.color}` : 'Variant not found';
+
+        return {
+          name: product.name,
+          price: product.price,
+          quantity: item.quantity,
+          image: `${process.env.CLOUDFRONT_URL}${image}`,
+          variant: variantInfo
+        };
+      });
+
       res.status(200).json({ items });
     } else {
-      // Anonymous User: Retrieve cart from the session
-      const cart = req.session.cart
+      // =========================
+      // Anonymous User Flow
+      // =========================
 
-      const products = await Product.find({ _id: { $in: cart?.items?.map(item => item.product) } })
-      if (cart && cart.items) {
-        // Assuming session.cart.items has productId, name, price, quantity, image, variant
-        items = cart.items.map(item => ({
-          name: products.find(p => p._id.toString() === item.product.toString()).name,
-          price: products.find(p => p._id.toString() === item.product.toString()).price,
-          quantity: item.quantity,
-          image: products.find(p => p._id.toString() === item.product.toString()).image,
-          variant: item.variant
-        }));
+      // Retrieve cart from the session
+      const cart = req.session.cart;
+
+      if (!cart || !cart.items) {
+        return res.status(200).json({ items: [] });
       }
+
+      // Extract all product IDs from the cart items
+      const productIds = cart.items.map(item => item.product);
+
+      // Fetch product details from the database
+      const products = await Product.find(
+        { _id: { $in: productIds } },
+        'name price images variants'
+      );
+
+      // Create a map for quick lookup of product details
+      const productMap = {};
+      products.forEach(product => {
+        productMap[product._id.toString()] = product;
+      });
+
+      // Prepare the items array with image URLs prepended by CloudFront URL
+      const items = cart.items.map(item => {
+        const product = productMap[item.product.toString()];
+        const image = product.images[0]
+
+        // Find the variant details using variant ID
+        const variantDetail = product.variants.id(item.variant);
+        const variantInfo = variantDetail ? `${variantDetail.size} - ${variantDetail.color}` : 'Variant not found';
+
+        return {
+          name: product.name,
+          price: product.price,
+          quantity: item.quantity,
+          image: `${process.env.CLOUDFRONT_URL}${image}`,
+          variant: variantInfo
+        };
+      });
+
       res.status(200).json({ items });
     }
   } catch (error) {
-    res.status(500).json({ message: 'Error getting cart', error: error.message });
+    console.error('Error getting mini cart:', error);
+    return res.status(500).json({ message: 'Error getting mini cart', error: error.message });
   }
-}
+};
 
 exports.getSelectedItems = async (req, res) => {
   let selectedItems = []
@@ -306,7 +370,6 @@ exports.getSelectedItems = async (req, res) => {
 exports.updateItem = async (req, res) => {
   try {
     const { productId, variant, quantity } = req.body
-
     // Input Validation
     if (!productId || !variant || typeof quantity !== 'number') {
       return res.status(400).json({ message: 'Invalid input data' })
@@ -394,7 +457,7 @@ exports.removeItem = async (req, res) => {
       // =======================
       // Authenticated User Flow
       // =======================
-      
+
       const cart = await Cart.findOne({ user: req.user.id });
       if (!cart) {
         return res.status(404).json({ message: 'Cart not found' });
@@ -645,11 +708,11 @@ exports.checkout = async (req, res) => {
           <th>Price</th>
         </tr>
         ${selectedCartItems.map((item) => {
-          const productName = item.product.name
-          const variant = item.variant
-          const quantity = item.quantity
-          const price = item.price
-          return `
+      const productName = item.product.name
+      const variant = item.variant
+      const quantity = item.quantity
+      const price = item.price
+      return `
             <tr>
               <td>${productName}</td>
               <td>${variant}</td>x
@@ -657,7 +720,7 @@ exports.checkout = async (req, res) => {
               <td>${price}</td>
             </tr>
           `
-        }).join('')}
+    }).join('')}
         <tr>
           <td colspan="3" style="text-align: right; font-weight: bold;">Total:</td>
           <td>${cart.total}</td>

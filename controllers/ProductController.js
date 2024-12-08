@@ -36,9 +36,29 @@ exports.getAllProducts = async (req, res) => {
 exports.getProductById = async (req, res) => {
   try {
     const { id } = req.params;
-    const product = await Product.findById(id);
+    const product = await Product.findById(id).lean();
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    // Transform product images
+    if (product.images && Array.isArray(product.images)) {
+      product.images = product.images.map(image => `${process.env.CLOUDFRONT_URL}${image}`);
+    } else {
+      product.images = [];
+    }
+
+    // Transform product variants
+    if (product.variants && Array.isArray(product.variants)) {
+      product.variants = product.variants.map(variant => {
+        const [size, color] = variant.name.split(' - ');
+        return {
+          size: size,
+          color: color,
+          stock: variant.stock,
+          _id: variant._id
+        };
+      });
     }
 
     let hasPurchased = false;
@@ -54,7 +74,8 @@ exports.getProductById = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
-}
+};
+
 
 // get products by category
 exports.getProductsByCategory = async (req, res) => {
@@ -100,7 +121,6 @@ exports.sortByPrice = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 }
-
 exports.getBestSellingProducts = async (req, res) => {
   try {
     // Step 1: Fetch Relevant Orders
@@ -135,9 +155,9 @@ exports.getBestSellingProducts = async (req, res) => {
       return res.status(200).json({ success: true, data: [] });
     }
 
-    // Step 4: Fetch Product Details
+    // Step 4: Fetch Product Details with Multiple Images
     const productIds = sortedProductSales.map(item => item.productId);
-    const products = await Product.find({ _id: { $in: productIds } }).select('name image price');
+    const products = await Product.find({ _id: { $in: productIds } }).select('name images price');
 
     // Step 5: Assemble the Final Response
     const bestSelling = sortedProductSales.map(item => {
@@ -145,7 +165,9 @@ exports.getBestSellingProducts = async (req, res) => {
       return {
         productId: item.productId,
         name: product ? product.name : 'Unknown Product',
-        image: product ? product.image : null,
+        images: product && product.images 
+          ? product.images.map(image => `${process.env.CLOUDFRONT_URL}${image}`) 
+          : [],
         price: product ? product.price : null,
         totalSold: item.totalSold
       };
