@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const CouponController = require('../controllers/CouponController');
 const { admin } = require('../middleware/authMiddleware'); 
+const { auth } = require('../middleware/authMiddleware')
 
 
-router.post('/create', admin, CouponController.createCoupon);
+router.post('/create', auth, CouponController.createCoupon);
 router.put('/update/:id', admin, CouponController.updateCoupon);
 router.get('/getById/:id', CouponController.getById);
 router.get('/getAll', CouponController.getAll);

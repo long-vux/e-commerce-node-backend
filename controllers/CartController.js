@@ -32,10 +32,12 @@ exports.addToCart = async (req, res) => {
   }
 
   const price = product.price * parseInt(quantity, 10);
+  console.log('Variant from request:', variant);
 
   // Check Stock for the Selected Variant
-  const stock = product.variants.find(v => v.name.trim().toLowerCase() === variant)?.stock;
-  console.log(product.variants)
+  const stock = product.variants.find(v => v.name && v.name.trim().toLowerCase() === variant.trim().toLowerCase())?.stock;
+  console.log('Product Variants:', product.variants);
+  console.log("This is stock: ", stock)
   if (!stock) {
     return res.status(400).json({ message: 'Variant not found' });
   } else if (stock < quantity) {
