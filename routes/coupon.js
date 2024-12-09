@@ -6,9 +6,9 @@ const { auth } = require('../middleware/authMiddleware')
 
 
 router.post('/create', auth, CouponController.createCoupon);
-router.put('/update/:id', admin, CouponController.updateCoupon);
+router.put('/update/:id', auth, CouponController.updateCoupon);
 router.get('/getById/:id', CouponController.getById);
 router.get('/getAll', CouponController.getAll);
-router.delete('/delete/:id', admin, CouponController.deleteCoupon);
+router.delete('/delete/:id', auth, CouponController.deleteCoupon);
 
 module.exports = router;
