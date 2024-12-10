@@ -11,7 +11,7 @@ router.put('/:userId/ban', auth, admin, AdminController.banUser)
 router.get('/new-users', auth, admin, AdminController.getNewUsers)
 
 // ================================= Order ================================
-router.get('/orders', auth, admin, AdminController.getOrdersPaginated)
+router.get('/get-all-orders', auth, admin, AdminController.getOrdersPaginated)
 
 // ================================= Revenue ================================
 router.get('/revenue', auth, admin, AdminController.getRevenue)

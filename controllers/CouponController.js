@@ -15,24 +15,31 @@ exports.createCoupon = async (req, res) => {
     res.status(500).json({ message: 'Error creating coupon' });
   }
 };
-
 exports.updateCoupon = async (req, res) => {
   try {
     const { id } = req.params;
-    // update anything from frontend 
-    // const { code, discountPercentage, maxUsage } = req.body;
+    const { code } = req.body;
 
-    // check if code already exists
-    const existingCoupon = await Coupon.findById(id);
-    if (existingCoupon && existingCoupon.code !== req.body.code) {
+    // Check if a coupon with the same code exists, excluding the one being updated
+    const existingCoupon = await Coupon.findOne({ code, _id: { $ne: id } });
+
+    if (existingCoupon) {
       return res.status(400).json({ message: 'Coupon code already exists' });
     }
+
+    // Update the coupon with the provided id
     const coupon = await Coupon.findByIdAndUpdate(id, req.body, { new: true });
+
+    if (!coupon) {
+      return res.status(404).json({ message: 'Coupon not found' });
+    }
+
     res.status(200).json(coupon);
   } catch (error) {
     res.status(500).json({ message: 'Error updating coupon', error: error.message });
   }
 };
+
 
 exports.getById = async (req, res) => {
   const { id } = req.params;

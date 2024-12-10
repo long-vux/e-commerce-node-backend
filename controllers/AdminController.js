@@ -11,11 +11,11 @@ exports.getUsers = async (req, res) => {
   try {
     const users = await User.find()
     res.status(200).json({ success: true, data: users })
-  } catch (error) {
+  } catch (error) {  
     res.status(500).json({ success: false, message: error.message })
   }
 }
-
+  
 exports.getNewUsers = async (req, res) => {
   try {
     const users = await User.find({ createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }) // 24 hours
@@ -44,7 +44,7 @@ exports.banUser = async (req, res) => {
 
 exports.getOrdersPaginated = async (req, res) => {
   try {
-    const { page = 1, limit = 20, filter } = req.query;
+    const { filter } = req.query;
     const query = {};
 
     const now = new Date();
@@ -81,12 +81,11 @@ exports.getOrdersPaginated = async (req, res) => {
 
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .populate('user', 'name email')
 
     const total = await Order.countDocuments(query);
 
-    res.status(200).json({ success: true, data: orders, total, page, pages: Math.ceil(total / limit) });
+    res.status(200).json({ success: true, data: orders, total });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -108,8 +107,7 @@ exports.getRevenue = async (req, res) => {
 
 exports.addProduct = async (req, res) => {
   try {
-    const { name, description, price, category, tags, variants } = req.body;
-    console.log('variants: ', variants);
+    const { name, description, price, category, tags, variants, weight } = req.body;
 
     // Parse variants if it's a string
     let parsedVariants;
@@ -154,6 +152,7 @@ exports.addProduct = async (req, res) => {
       tags: tags.split(',').map(tag => tag.trim()),
       variants: formattedVariants,
       images: uploadedImages,
+      weight,
     });
 
     res.status(201).json({ success: true, data: product });
@@ -164,10 +163,8 @@ exports.addProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, category, tags, variants, existingImages } = req.body;
+    const { name, description, price, category, tags, variants, existingImages, weight } = req.body;
     const images = req.files; // New images uploaded
-    console.log('images: ', images)
-    console.log('existingImages: ', existingImages)
     // Parse variants if it's a string
     let parsedVariants;
     if (typeof variants === 'string') {
@@ -227,7 +224,6 @@ exports.updateProduct = async (req, res) => {
       for (const image of images) {
         const fileName = `${Date.now()}_${image.originalname}`;
         await uploadToS3(image.buffer, fileName, image.mimetype);
-        console.log(fileName)
         uploadedImages.push(fileName);
       }
     
@@ -235,7 +231,6 @@ exports.updateProduct = async (req, res) => {
 
     // Combine existing images with newly uploaded images
     const finalImages = [...imagesToKeep, ...uploadedImages];
-    console.log('final', finalImages)
     // Update the product with the new data
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
@@ -247,6 +242,7 @@ exports.updateProduct = async (req, res) => {
         tags: tags.split(',').map(tag => tag.trim()),
         variants: formattedVariants,
         images: finalImages,
+        weight,
       },
       { new: true }
     );
