@@ -16,8 +16,6 @@ exports.getUsers = async (req, res) => {
   }
 }
   
-
-
 exports.getNewUsers = async (req, res) => {
   try {
     const users = await User.find({ createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }) // 24 hours
@@ -166,10 +164,8 @@ exports.addProduct = async (req, res) => {
 exports.updateProduct = async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, category, tags, variants, existingImages } = req.body;
+    const { name, description, price, category, tags, variants, existingImages, weight } = req.body;
     const images = req.files; // New images uploaded
-    console.log('images: ', images)
-    console.log('existingImages: ', existingImages)
     // Parse variants if it's a string
     let parsedVariants;
     if (typeof variants === 'string') {
@@ -229,7 +225,6 @@ exports.updateProduct = async (req, res) => {
       for (const image of images) {
         const fileName = `${Date.now()}_${image.originalname}`;
         await uploadToS3(image.buffer, fileName, image.mimetype);
-        console.log(fileName)
         uploadedImages.push(fileName);
       }
     
@@ -237,7 +232,6 @@ exports.updateProduct = async (req, res) => {
 
     // Combine existing images with newly uploaded images
     const finalImages = [...imagesToKeep, ...uploadedImages];
-    console.log('final', finalImages)
     // Update the product with the new data
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
@@ -249,6 +243,7 @@ exports.updateProduct = async (req, res) => {
         tags: tags.split(',').map(tag => tag.trim()),
         variants: formattedVariants,
         images: finalImages,
+        weight,
       },
       { new: true }
     );

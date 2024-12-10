@@ -6,8 +6,6 @@ const crypto = require('crypto')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const Cart = require('../models/Cart')
-const { getFromS3 } = require('../utils/s3Upload')
-
 
 exports.googleLogin = async (req, res) => {
   const token = req.body.token
@@ -46,7 +44,7 @@ exports.googleLogin = async (req, res) => {
         image: userObject.picture,
       }
     } else {
-      const imageUrl = await getFromS3(user.image)
+      const imageUrl = `${process.env.CLOUDFRONT_URL}${user.image}`
       payload = {
         id: user._id,
         email: userObject.email,
