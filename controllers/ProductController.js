@@ -92,6 +92,7 @@ exports.getProductsByCategory = async (req, res) => {
 exports.searchProducts = async (req, res) => {
   try {
     const { name } = req.query;
+    console.log("this is search function: ", name)
     let query = {};
 
     if (name) query.name = { $regex: name, $options: 'i' };

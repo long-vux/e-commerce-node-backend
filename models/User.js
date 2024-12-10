@@ -25,6 +25,7 @@ const UserSchema = new mongoose.Schema({
   },
   role: { type: String, enum: ["admin", "user"], default: "user" },
   verified: { type: Boolean, default: false },
+  isBanned: { type: Boolean, default: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", UserSchema);
