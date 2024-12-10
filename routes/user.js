@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const UserController = require("../controllers/UserController");
-const { auth } = require("../middleware/authMiddleware");
+const { auth, authOptional } = require("../middleware/authMiddleware");
 const upload = require("../middleware/multer");
 
 // ==============================================================================
@@ -25,16 +25,17 @@ router.put("/password/reset/:userId/:token", UserController.resetPassword);
 //                            Addresses
 // ==============================================================================
 
-// GET /api/user/addresses
-router.get("/addresses", auth, UserController.getAddresses);  
+// // GET /api/user/addresses
+router.get("/addresses", authOptional, UserController.getAddresses);  
 
 // POST /api/user/addAddress
-router.post("/addAddress", auth, UserController.addAddress);
+router.post("/addAddress", authOptional, UserController.addAddress);
 
 // PUT /api/user/updateAddress/:addressId
-router.put("/updateAddress/:addressId", auth, UserController.updateAddress);
+  router.put("/updateAddress/:addressId", authOptional, UserController.updateAddress);
 
 // DELETE /api/user/deleteAddress/:addressId
-router.delete("/deleteAddress/:addressId", auth, UserController.deleteAddress);
+router.delete("/deleteAddress/:addressId", authOptional, UserController.deleteAddress);
 
 module.exports = router;
+

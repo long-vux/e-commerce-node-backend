@@ -240,13 +240,15 @@ exports.getCart = async (req, res) => {
         const image = product.images[0]
 
         return {
+          _id: product._id,
           name: product.name,
           price: item.price,
           originalPrice: product.price,
           quantity: item.quantity,
           image: `${cloudFrontUrl}${image}`,
           variant: item.variant,
-          weight: product.weight
+          weight: product.weight,
+          selected: item.selected
         };
       });
 
@@ -421,7 +423,7 @@ exports.getSelectedItems = async (req, res) => {
             name: product.name,
             price: item.price,
             quantity: item.quantity,
-            image: `${process.env.CLOUDFRONT_URL}/${image}`,
+            image: `${process.env.CLOUDFRONT_URL}${image}`,
             variant: item.variant,
             weight: product.weight,
             selected: item.selected,
@@ -730,14 +732,14 @@ exports.removeCoupon = async (req, res) => {
 }
 
 exports.checkout = async (req, res) => {
-  const { firstName, lastName, email, address, selectedItems, total, discount, shippingFee, tax, receiverPhone, receiverName } = req.body;
+  const { receiverName, receiverEmail, receiverPhone, address, selectedItems, total, discount, shippingFee, tax} = req.body;
   
   if (!selectedItems || selectedItems.length === 0) {
     return res.status(400).json({ message: 'No items selected' });
   }
 
   try {
-    let user = await User.findOne({ email });
+    let user = await User.findOne({ email: receiverEmail });
     let identifyUserFlag = '';
 
     // If user not found, create a new user
@@ -745,7 +747,7 @@ exports.checkout = async (req, res) => {
       identifyUserFlag = 'anonymous';
       const randomPassword = crypto.randomBytes(10).toString('hex').slice(0, 8);
       const hashedPassword = await bcrypt.hash(randomPassword, 10);
-      user = await User.create({ lastName, firstName, email, address, password: hashedPassword });
+      user = await User.create({ firstName: receiverName, email: receiverEmail, address, password: hashedPassword });
 
       const token = await VerifyToken.create({
         userId: user._id,
@@ -763,7 +765,7 @@ exports.checkout = async (req, res) => {
         <p>Please change your password after logging in for security reasons.</p>
         <p>Best regards,<br/>MADNESS Team</p>
       `;
-      await sendEmail(email, subject, htmlContent);
+      await sendEmail(receiverEmail, subject, htmlContent);
     } else {
       if (!req.user) {
         identifyUserFlag = 'not-logged-in';
@@ -883,10 +885,10 @@ exports.checkout = async (req, res) => {
         <p>You can view your order details <a href="${url}/orders/${order._id}">here</a></p>
       </div>
     `;
-    await sendEmail(email, subject, htmlContent);
+    await sendEmail(receiverEmail, subject, htmlContent);
 
     res.status(200).json({ message: 'Order placed successfully. Please check your email for order details.', order });
   } catch (error) {
-    return res.status(500).json({ message: 'Error processing checkout' });
+    return res.status(500).json({ message: error.message });
   }
 };
