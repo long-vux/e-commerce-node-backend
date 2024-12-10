@@ -3,7 +3,7 @@ const User = require('../models/User')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const crypto = require('crypto')
-const { uploadToS3, getFromS3 } = require('../utils/s3Upload')
+const { uploadToS3 } = require('../utils/s3Upload')
 const jwt = require('jsonwebtoken')
 
 exports.updateProfile = async (req, res) => {
@@ -25,7 +25,7 @@ exports.updateProfile = async (req, res) => {
     }
     if (fileName) {
       updateData.image = fileName;
-    } 
+    }
 
     const user = await User.findOneAndUpdate({ email }, updateData, { new: true });
     if (!user) {
@@ -137,67 +137,147 @@ exports.resetPassword = async (req, res) => {
 
 exports.getAddresses = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const user = await User.findById(userId);
-    res.status(200).json({ success: true, data: user.addresses });
+    // authenticated user
+    if (req.user) {
+      const userId = req.user.id;
+      const user = await User.findById(userId);
+      res.status(200).json({ success: true, data: user.addresses });
+    } else {
+      // anonymous user
+      const cart = req.session.cart;
+      if (!cart || !cart.addresses) {
+        return res.status(404).json({ success: false, message: 'Cart not found' });
+      }
+      res.status(200).json({ success: true, data: cart.addresses });
+    }
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
-} 
+}
+const mongoose = require('mongoose');
 
 // User Action: User adds a new address.
 exports.addAddress = async (req, res) => {
   try {
-    const userId = req.user.id;
     const address = req.body;
-    const user = await User.findById(userId);
-    console.log('address', user.addresses);
-    user.addresses.push(address);
-    await user.save();
 
-    res.status(200).json({ success: true, data: user.addresses });
+    if (req.user) {
+      // Authenticated user
+      const userId = req.user.id;
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      user.addresses.push(address);
+      await user.save();
+
+      return res.status(200).json({ success: true, data: user.addresses });
+    } else {
+      // Anonymous user
+      if (!req.session.cart) {
+        req.session.cart = { addresses: [] };
+      } else {
+        if (!req.session.cart.addresses) {
+          req.session.cart.addresses = [];
+        }
+      }
+
+      const cart = req.session.cart;
+      address._id = new mongoose.Types.ObjectId(); // Generate a MongoDB ObjectId for the address
+      cart.addresses.push(address);
+
+      return res.status(200).json({ success: true, data: cart.addresses });
+    }
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
-}
-
+};
 // User Action: User updates an existing address.
 exports.updateAddress = async (req, res) => {
   try {
-    const userId = req.user.id;
     const { addressId } = req.params;
     const updateData = req.body;
-    const user = await User.findById(userId);
-    const address = user.addresses.id(addressId);
-    if (!address) {
-      return res.status(404).json({ success: false, message: 'Address not found' });
+
+    if (req.user) {
+      // Authenticated user
+      const userId = req.user.id;
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const address = user.addresses.id(addressId);
+      if (!address) {
+        return res.status(404).json({ success: false, message: 'Address not found' });
+      }
+
+      address.set(updateData);
+      await user.save();
+
+      return res.status(200).json({ success: true, data: address });
+    } else {
+      // Anonymous user
+      const cart = req.session.cart;
+
+      if (!cart || !cart.addresses) {
+        return res.status(404).json({ success: false, message: 'Cart not found' });
+      }
+
+      const address = cart.addresses.find(addr => addr._id.toString() === addressId);
+      if (!address) {
+        return res.status(404).json({ success: false, message: 'Address not found' });
+      }
+
+      Object.assign(address, updateData);
+      return res.status(200).json({ success: true, data: address });
     }
-
-    address.set(updateData);
-    await user.save();
-
-    res.status(200).json({ success: true, data: address });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
-}
-
+};
 // User Action: User deletes an existing address.
-exports.deleteAddress = async (req, res) => { 
+exports.deleteAddress = async (req, res) => {
   try {
-    const userId = req.user.id;
     const { addressId } = req.params;
 
-    const user = await User.findById(userId);
-    const address = user.addresses.id(addressId);
-    if (!address) {
-      return res.status(404).json({ success: false, message: 'Address not found' });
-    }
-    user.addresses.pull(addressId);
-    await user.save();
+    if (req.user) {
+      // Authenticated user
+      const userId = req.user.id;
+      const user = await User.findById(userId);
 
-    res.status(200).json({ success: true, message: 'Address deleted successfully' });
+      if (!user) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const address = user.addresses.id(addressId);
+      if (!address) {
+        return res.status(404).json({ success: false, message: 'Address not found' });
+      }
+
+      address.remove();
+      await user.save();
+
+      return res.status(200).json({ success: true, message: 'Address deleted' });
+    } else {
+      // Anonymous user
+      const cart = req.session.cart;
+
+      if (!cart || !cart.addresses) {
+        return res.status(404).json({ success: false, message: 'Cart not found' });
+      }
+
+      const addressIndex = cart.addresses.findIndex(addr => addr._id.toString() === addressId);
+      if (addressIndex === -1) {
+        return res.status(404).json({ success: false, message: 'Address not found' });
+      }
+
+      cart.addresses.splice(addressIndex, 1);
+      return res.status(200).json({ success: true, message: 'Address deleted' });
+    }
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
-}
+};

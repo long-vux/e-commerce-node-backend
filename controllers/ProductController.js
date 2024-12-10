@@ -103,6 +103,7 @@ exports.searchProducts = async (req, res) => {
   }
 }
 
+
 exports.sortByPrice = async (req, res) => {
   const { sort } = req.query;
   try {
