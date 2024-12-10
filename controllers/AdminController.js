@@ -15,6 +15,14 @@ exports.getNumberOfUsers = async (req, res) => {
     res.status(500).json({ success: false, message: error.message })
   }
 }
+exports.getUsers = async (req, res) => {
+  try {
+    const users = await User.find()
+    res.status(200).json({ success: true, data: users })
+  } catch (error) {  
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
   
 exports.getNewUsers = async (req, res) => {
   try {
