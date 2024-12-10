@@ -21,4 +21,6 @@ router.post('/add-product', auth, admin, upload.array('images', 6), AdminControl
 router.put("/update-product/:id", auth, admin, upload.array('images', 6), AdminController.updateProduct);
 router.delete("/delete-product/:id", auth, admin, AdminController.deleteProduct);
 
+
+
 module.exports = router;

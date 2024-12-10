@@ -32,6 +32,7 @@ exports.addToCart = async (req, res) => {
   }
 
   const price = product.price * parseInt(quantity, 10);
+  console.log('Variant from request:', variant);
 
   console.log(variant)
   // Check Stock for the Selected Variant
