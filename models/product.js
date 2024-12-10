@@ -14,6 +14,7 @@ const productSchema = mongoose.Schema({
   variants: [variantSchema],
   images: [String],
   totalSold: { type: Number, default: 0 },
+  weight: { type: Number, default: 500 }, // in grams
 });
 
 productSchema.index({ name: 'text', price: 1 });

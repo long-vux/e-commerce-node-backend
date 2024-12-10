@@ -12,5 +12,6 @@ router.post('/apply-coupon', authOptional, CartController.applyCoupon);
 router.delete('/remove-coupon/:couponId', authOptional, CartController.removeCoupon);
 router.post('/checkout', authOptional, CartController.checkout);
 router.put('/update-item', authOptional, CartController.updateItem);
-
+router.put('/update-selected-item', authOptional, CartController.updateSelectedItem);
+router.get('/get-selected-items', authOptional, CartController.getSelectedItems);
 module.exports = router;

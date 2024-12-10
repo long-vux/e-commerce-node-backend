@@ -8,6 +8,7 @@ const getOrdersOfUser = async (req, res) => {
     // add cloudFront url to images
     orders.forEach(order => {
       order.items.forEach(item => {
+        console.log(item.product.images[0])
         item.product.image = `${process.env.CLOUDFRONT_URL}${item.product.images[0]}`;
       });
     });

@@ -91,19 +91,10 @@ exports.getProductsByCategory = async (req, res) => {
 // search & filter
 exports.searchProducts = async (req, res) => {
   try {
-    const { name, minPrice, maxPrice, tags, categories } = req.query;
+    const { name } = req.query;
     let query = {};
 
     if (name) query.name = { $regex: name, $options: 'i' };
-    if (minPrice || maxPrice) query.price = { $gte: minPrice, $lte: maxPrice };
-    if (tags) {
-      const tagsArray = tags.split(',').map(tag => tag.trim());
-      query.tags = { $in: tagsArray };
-    }
-    if (categories) {
-      const categoriesArray = categories.split(',').map(category => category.trim());
-      query.categories = { $in: categoriesArray };
-    }
 
     const products = await Product.find(query);
     res.status(200).json({ success: true, data: products });

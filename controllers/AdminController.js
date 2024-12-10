@@ -108,8 +108,7 @@ exports.getRevenue = async (req, res) => {
 
 exports.addProduct = async (req, res) => {
   try {
-    const { name, description, price, category, tags, variants } = req.body;
-    console.log('variants: ', variants);
+    const { name, description, price, category, tags, variants, weight } = req.body;
 
     // Parse variants if it's a string
     let parsedVariants;
@@ -154,6 +153,7 @@ exports.addProduct = async (req, res) => {
       tags: tags.split(',').map(tag => tag.trim()),
       variants: formattedVariants,
       images: uploadedImages,
+      weight,
     });
 
     res.status(201).json({ success: true, data: product });

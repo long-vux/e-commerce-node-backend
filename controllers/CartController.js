@@ -8,7 +8,7 @@ const sendEmail = require('../utils/sendEmail');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Coupon = require('../models/Coupon');
-
+const { formatCurrency } = require('../utils/formatCurrency');
 /**
  * Adds an item to the cart.
  * Supports both anonymous and authenticated users.
@@ -33,9 +33,9 @@ exports.addToCart = async (req, res) => {
 
   const price = product.price * parseInt(quantity, 10);
 
+  console.log(variant)
   // Check Stock for the Selected Variant
-  const stock = product.variants.find(v => v.name.trim().toLowerCase() === variant)?.stock;
-  console.log(product.variants)
+  const stock = product.variants.find(v => v.name === variant)?.stock;
   if (!stock) {
     return res.status(400).json({ message: 'Variant not found' });
   } else if (stock < quantity) {
@@ -176,7 +176,7 @@ exports.getCart = async (req, res) => {
       // =======================
 
       // Retrieve cart from the database with populated product details
-      let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price images');
+      let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price images weight ');
 
       if (!cart) {
         // If no cart exists for the user, respond with an empty cart
@@ -194,14 +194,16 @@ exports.getCart = async (req, res) => {
       // Prepare the response cart with populated product and variant details
       const items = cart.items.map(item => {
         const product = productMap[item.product._id.toString()];
-        console.log(product)
         const image = product.images[0]
         return {
           name: product.name,
           price: item.price,
+          originalPrice: product.price,
           quantity: item.quantity,
           image: `${process.env.CLOUDFRONT_URL}${image}`,
           variant: item.variant,
+          weight: product.weight,
+          selected: item.selected,
           _id: product._id
         };
       });
@@ -226,7 +228,7 @@ exports.getCart = async (req, res) => {
       // Fetch product details from the database
       const products = await Product.find(
         { _id: { $in: productIds } },
-        'name price images'
+        'name price images weight'
       );
 
       // Create a map for quick lookup of product details
@@ -244,7 +246,8 @@ exports.getCart = async (req, res) => {
           price: item.price,
           quantity: item.quantity,
           image: `${cloudFrontUrl}/${image}`,
-          variant: item.variant
+          variant: item.variant,
+          weight: product.weight
         };
       });
 
@@ -353,31 +356,90 @@ exports.getMiniCart = async (req, res) => {
     return res.status(500).json({ message: 'Error getting mini cart', error: error.message });
   }
 };
-
 exports.getSelectedItems = async (req, res) => {
-  let selectedItems = []
-  if (req.user) {
-    selectedItems = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image')
-  } else {
-    selectedItems = req.session.cart
+  try {
+    let selectedItems = [];
+    
+    if (req.user) {
+      // Authenticated User Flow
+      const cart = await Cart.findOne({ user: req.user.id }).populate(
+        'items.product',
+        'name price images weight'
+      );
+
+      if (!cart) {
+        return res.status(404).json({ message: 'Cart not found' });
+      }
+
+      // Filter only selected items
+      selectedItems = cart.items
+        .filter(item => item.selected)
+        .map(item => {
+          const product = item.product;
+          const image = product.images[0];
+          return {
+            name: product.name,
+            price: item.price,
+            originalPrice: product.price,
+            quantity: item.quantity,
+            image: `${process.env.CLOUDFRONT_URL}${image}`,
+            variant: item.variant,
+            weight: product.weight,
+            selected: item.selected,
+            _id: product._id,
+          };
+        });
+    } else {
+      // Anonymous User Flow
+      const cart = req.session.cart;
+
+      if (!cart || !cart.items) {
+        return res.status(404).json({ message: 'Cart not found' });
+      }
+
+      const productIds = cart.items.map(item => item.product);
+      const products = await Product.find(
+        { _id: { $in: productIds } },
+        'name price images weight'
+      );
+
+      const productMap = {};
+      products.forEach(product => {
+        productMap[product._id.toString()] = product;
+      });
+
+      // Filter only selected items
+      selectedItems = cart.items
+        .filter(item => item.selected)
+        .map(item => {
+          const product = productMap[item.product.toString()];
+          const image = product.images[0];
+
+          return {
+            name: product.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: `${process.env.CLOUDFRONT_URL}/${image}`,
+            variant: item.variant,
+            weight: product.weight,
+            selected: item.selected,
+            _id: product._id,
+          };
+        });
+    }
+
+    return res.status(200).json({ items: selectedItems });
+  } catch (error) {
+    console.error('Error retrieving selected items:', error);
+    return res
+      .status(500)
+      .json({ message: 'Error getting selected items', error: error.message });
   }
-  if (!selectedItems) {
-    return res.status(400).json({ message: 'Cart not found' })
-  }
-  res.status(200).json({ items: selectedItems.items })
-}
+};
 
 exports.updateItem = async (req, res) => {
   try {
-    const { productId, variant, quantity } = req.body
-    // Input Validation
-    if (!productId || !variant || typeof quantity !== 'number') {
-      return res.status(400).json({ message: 'Invalid input data' })
-    }
-
-    if (quantity < 1) {
-      return res.status(400).json({ message: 'Quantity must be at least 1' })
-    }
+    const { productId, variant, quantity, selected } = req.body
 
     // Find the user's cart
     const cart = await Cart.findOne({ user: req.user.id })
@@ -404,6 +466,12 @@ exports.updateItem = async (req, res) => {
       return res.status(404).json({ message: 'Product not found' })
     }
 
+    if (selected) {
+      cart.items[itemIndex].selected = true
+    } else {
+      cart.items[itemIndex].selected = false
+    }
+
     // Update quantity and price
     cart.items[itemIndex].quantity = quantity
     cart.items[itemIndex].price = product.price * quantity
@@ -421,6 +489,13 @@ exports.updateItem = async (req, res) => {
   }
 }
 
+exports.updateSelectedItem = async (req, res) => {
+  const { productId, variant, selected } = req.body
+  const cart = await Cart.findOne({ user: req.user.id })
+  cart.items.find(item => item.product.toString() === productId && item.variant === variant).selected = selected
+  await cart.save()
+  res.status(200).json({ message: 'Item updated successfully', cart })
+}
 /**
  * Clears the cart.
  * Supports both anonymous and authenticated users.
@@ -595,145 +670,151 @@ exports.removeCoupon = async (req, res) => {
   }
 }
 
-// Create a new user when checkout but not login
 exports.checkout = async (req, res) => {
-  const { firstName, lastName, email, address, selectedItems } = req.body // selectedItems is an array of objects with productId and variant
-  if (!selectedItems) {
-    return res.status(400).json({ message: 'No items selected' })
+  const { firstName, lastName, email, address, selectedItems, total, discount, shippingFee, tax } = req.body;
+  
+  if (!selectedItems || selectedItems.length === 0) {
+    return res.status(400).json({ message: 'No items selected' });
   }
-  let identifyUserFlag = ''
+
   try {
-    let user = await User.findOne({ email })
-    // if user not found, create a new user
+    let user = await User.findOne({ email });
+    let identifyUserFlag = '';
+
+    // If user not found, create a new user
     if (!user) {
-      identifyUserFlag = 'anonymous'
-      const randomPassword = crypto.randomBytes(10).toString('hex').slice(0, 8)
-      const hashedPassword = await bcrypt.hash(randomPassword, 10)
-      user = await User.create({ lastName, firstName, email, address, password: hashedPassword })
+      identifyUserFlag = 'anonymous';
+      const randomPassword = crypto.randomBytes(10).toString('hex').slice(0, 8);
+      const hashedPassword = await bcrypt.hash(randomPassword, 10);
+      user = await User.create({ lastName, firstName, email, address, password: hashedPassword });
 
       const token = await VerifyToken.create({
         userId: user._id,
         token: crypto.randomBytes(8).toString('hex')
-      })
+      });
 
-      //   Send verification email
-      const url = `${process.env.FRONTEND_URL}/${user._id}/verify/${token.token}`
-      const subject = 'Verify Your Email and Set Your Password'
+      const url = `${process.env.FRONTEND_URL}/${user._id}/verify/${token.token}`;
+      const subject = 'Verify Your Email and Set Your Password';
       const htmlContent = `
-      <h1>Welcome to MADNESS!</h1>
-      <p>Thank you for browing and making purchases at MADNESS!</p>
-      <p>Please click the link below to verify your email and set your password:</p>
-      <a href="${url}">Verify Email</a>
-      <p>Your temporary password is: <strong>${randomPassword}</strong></p>
-      <p>Please change your password after logging in for security reasons.</p>
-      <p>Best regards,<br/>MADNESS Team</p>
-    `
-      await sendEmail(email, subject, htmlContent)
+        <h1>Welcome to MADNESS!</h1>
+        <p>Thank you for browsing and making purchases at MADNESS!</p>
+        <p>Please click the link below to verify your email and set your password:</p>
+        <a href="${url}">Verify Email</a>
+        <p>Your temporary password is: <strong>${randomPassword}</strong></p>
+        <p>Please change your password after logging in for security reasons.</p>
+        <p>Best regards,<br/>MADNESS Team</p>
+      `;
+      await sendEmail(email, subject, htmlContent);
     } else {
       if (!req.user) {
-        identifyUserFlag = 'not-logged-in'
-        return res.status(401).json({ message: 'User already exists. Please log in to use your cart' })
+        identifyUserFlag = 'not-logged-in';
+        return res.status(401).json({ message: 'User already exists. Please log in to use your cart' });
       }
-      identifyUserFlag = 'logged-in'
+      identifyUserFlag = 'logged-in';
     }
 
     // find cart
-    let cart
-    if (req.user)
-      cart = await Cart.findOne({ user: req.user.id })
-    else
-      cart = req.session.cart
+    let cart;
+    if (req.user) {
+      cart = await Cart.findOne({ user: req.user.id });
+    } else {
+      cart = req.session.cart;
+    }
 
-    if (!cart)
-      return res.status(400).json({ message: 'Cart not found' })
+    if (!cart) {
+      return res.status(400).json({ message: 'Cart not found' });
+    }
 
-    if (cart.items.length === 0)
-      return res.status(400).json({ message: 'Your cart is empty' })
+    if (cart.items.length === 0) {
+      return res.status(400).json({ message: 'Your cart is empty' });
+    }
 
     // get selected items from cart
-    const selectedCartItems = cart.items.filter(item => selectedItems.some(selectedItem => selectedItem.productId === item.product.toString() && selectedItem.variant === item.variant))
+    const selectedCartItems = cart.items.filter(item => selectedItems.some(selectedItem => selectedItem.productId === item.product.toString() && selectedItem.variant === item.variant));
 
-    if (selectedCartItems.length === 0)
-      return res.status(400).json({ message: 'No items selected' })
-
-    // calculate total of selected items
-    cart.total = selectedCartItems.reduce((acc, item) => acc + item.price, 0)
-    // apply coupon
-    const coupon = cart.coupon
-    let discount = 0
-    if (coupon) {
-      const couponObj = await Coupon.findById(coupon)
-      discount = Number(couponObj.discountPercentage)
+    if (selectedCartItems.length === 0) {
+      return res.status(400).json({ message: 'No items selected' });
     }
-    // Ensure discount does not exceed original total
-    // calculate total after discount
-    cart.total -= (cart.total * discount / 100)
 
-    // create order
+    // Create order using the data provided by the frontend
     const order = await Order.create({
       user: user._id,
       items: selectedCartItems,
-      discount: discount, // percentage
-      total: cart.total,
+      discount: discount || 0, // percentage
+      total: total,
+      shippingFee: shippingFee || 0,
+      tax: tax || 0,
       shippingAddress: address,
       status: 'pending'
-    })
+    });
 
-    user.orders.push(order._id)
-    await user.save()
+    user.orders.push(order._id);
+    await user.save();
+
     if (req.user) {
-      cart.items = cart.items.filter(item => !selectedCartItems.some(selectedItem => selectedItem.product.toString() === item.product.toString() && selectedItem.variant === item.variant))
-      cart.discount = 0
-      cart.total = 0
-      cart.coupon = null
-      await cart.save()
+      cart.items = cart.items.filter(item => !selectedCartItems.some(selectedItem => selectedItem.product.toString() === item.product.toString() && selectedItem.variant === item.variant));
+      cart.discount = 0;
+      cart.total = 0;
+      cart.coupon = null;
+      await cart.save();
     } else {
-      req.session.cart = { items: [], coupon: null, discount: 0, total: 0 }
+      req.session.cart = { items: [], coupon: null, discount: 0, total: 0 };
     }
 
-    // send email to user to thank them for their purchase
-    const url = `${process.env.FRONTEND_URL}`
-    const subject = 'Thank you for your purchase!'
+    const url = `${process.env.FRONTEND_URL}`;
+    const subject = 'Thank you for your purchase!';
     const htmlContent = `
-    <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; border-radius: 5px;">
-      <h1 style="text-align: center; font-size: 24px; font-weight: bold;">Welcome to MADNESS!</h1>
-      <p>Thank you for your purchase!</p>    
-      <p>Your order has been placed successfully.</p>
-      <p style="font-weight: bold;">Here are the details of your order:</p>
-      <table>
-        <tr>
-          <th>Product</th>
-          <th>Variant</th>
-          <th>Quantity</th>
-          <th>Price</th>
-        </tr>
-        ${selectedCartItems.map((item) => {
-      const productName = item.product.name
-      const variant = item.variant
-      const quantity = item.quantity
-      const price = item.price
-      return `
-            <tr>
-              <td>${productName}</td>
-              <td>${variant}</td>x
-              <td>${quantity}</td>
-              <td>${price}</td>
-            </tr>
-          `
-    }).join('')}
-        <tr>
-          <td colspan="3" style="text-align: right; font-weight: bold;">Total:</td>
-          <td>${cart.total}</td>
-        </tr>
-      </table>
-      <p>Best regards,<br/>MADNESS Team</p>
-      <p>You can view your order details <a href="${url}">here</a></p>
-    </div>
-    `
-    await sendEmail(email, subject, htmlContent)
+      <div style="max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ccc; border-radius: 5px;">
+        <h1 style="text-align: center; font-size: 24px; font-weight: bold;">Welcome to MADNESS!</h1>
+        <p>Thank you for your purchase!</p>    
+        <p>Your order has been placed successfully.</p>
+        <p style="font-weight: bold;">Here are the details of your order:</p>
+        <table>
+          <tr>
+            <th>Product</th>
+            <th>Variant</th>
+            <th>Quantity</th>
+            <th>Price</th>
+          </tr>
+          ${selectedCartItems.map((item) => {
+            const productName = item.product.name;
+            const variant = item.variant;
+            const quantity = item.quantity;
+            const price = formatCurrency(item.price);
+            return `
+              <tr>
+                <td>${productName}</td>
+                <td>${variant}</td>
+                <td>${quantity}</td>
+                <td>${price}</td>
+              </tr>
+            `;
+          }).join('')}
+          <tr>
+            <td colspan="3" style="text-align: right; font-weight: bold;">Subtotal:</td>
+            <td>${formatCurrency(total)}</td>
+          </tr>
+          <tr>
+            <td colspan="3" style="text-align: right; font-weight: bold;">Shipping Fee:</td>
+            <td>${formatCurrency(shippingFee)}</td>
+          </tr>
+          <tr>
+            <td colspan="3" style="text-align: right; font-weight: bold;">Tax:</td>
+            <td>${formatCurrency(tax)}</td>
+          </tr>
+          <tr>
+            <td colspan="3" style="text-align: right; font-weight: bold;">Total:</td>
+            <td>${formatCurrency(total + shippingFee + tax)}</td>
+          </tr>
+        </table>
+        <p>Best regards,<br/>MADNESS Team</p>
+        <p>You can view your order details <a href="${url}/orders/${order._id}">here</a></p>
+      </div>
+    `;
+    await sendEmail(email, subject, htmlContent);
 
-    res.status(200).json({ message: 'Order placed successfully. Please check your email for order details.', order })
+    res.status(200).json({ message: 'Order placed successfully. Please check your email for order details.', order });
   } catch (error) {
-    return res.status(500).json({ message: 'Error processing checkout' })
+    return res.status(500).json({ message: 'Error processing checkout' });
   }
-}
+};
