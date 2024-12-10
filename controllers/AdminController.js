@@ -16,6 +16,8 @@ exports.getUsers = async (req, res) => {
   }
 }
 
+
+
 exports.getNewUsers = async (req, res) => {
   try {
     const users = await User.find({ createdAt: { $gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } }) // 24 hours
