@@ -25,6 +25,7 @@ const UserSchema = new mongoose.Schema({
   },
   role: { type: String, enum: ["admin", "user"], default: "user" },
   verified: { type: Boolean, default: false },
+  purchasedProducts: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }]
 }, { timestamps: true });
 
 module.exports = mongoose.model("User", UserSchema);

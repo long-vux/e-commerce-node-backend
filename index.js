@@ -14,6 +14,7 @@ const cartRoutes = require("./routes/cart");
 const couponRoutes = require("./routes/coupon");
 const userRoutes = require("./routes/user");
 const orderRoutes = require("./routes/order");  
+const reviewRoutes = require("./routes/review");
 
 dotenv.config();
 const app = express();
@@ -58,6 +59,7 @@ app.use('/api/product', productRoutes);
 app.use("/api/cart", cartRoutes);
 app.use("/api/coupon", couponRoutes);
 app.use("/api/order", orderRoutes);
+app.use("/api/review", reviewRoutes);
 
 const PORT = process.env.PORT || 5000;  
 

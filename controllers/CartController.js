@@ -15,12 +15,9 @@ const { formatCurrency } = require('../utils/formatCurrency');
  */
 
 exports.addToCart = async (req, res) => {
-  if (req.user) console.log('User logged in - adding to cart')
-  else console.log('Anonymous user - adding to cart')
 
   const { productId, quantity, variant } = req.body;
 
-  // Validate Product ID
   if (!mongoose.Types.ObjectId.isValid(productId)) {
     return res.status(400).json({ message: 'Invalid product ID' });
   }
@@ -48,9 +45,10 @@ exports.addToCart = async (req, res) => {
       // =======================
       // Authenticated User Flow
       // =======================
+      if (req.user) console.log('User logged in - adding to cart')
 
       // Fetch or Create Cart for the User
-      let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
+      let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price images');
       if (!cart) {
         cart = await Cart.create({ user: req.user.id, items: [] });
       }
@@ -75,7 +73,7 @@ exports.addToCart = async (req, res) => {
       await cart.save();
 
       // Re-populate to Ensure Product Details are Included
-      cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price image');
+      cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price images');
 
       // Respond with the Updated Cart
       return res.status(200).json({ message: 'Item added to cart', cart });
@@ -84,6 +82,7 @@ exports.addToCart = async (req, res) => {
       // =========================
       // Anonymous User Flow
       // =========================
+      console.log('Anonymous user - adding to cart')
 
       // Initialize Cart in Session if It Doesn't Exist
       if (!req.session.cart || !req.session.cart.items) {
@@ -91,7 +90,6 @@ exports.addToCart = async (req, res) => {
       }
 
       let cart = req.session.cart;
-
       // Check if the Product with the Same Variant Exists in the Cart
       let existingItem = cart.items.find(item => {
         // Handle Both Populated and Unpopulated Product Fields
@@ -116,7 +114,6 @@ exports.addToCart = async (req, res) => {
 
       // Save the Updated Cart Back to Session
       req.session.cart = cart;
-
       // Ensure Session is Saved Before Proceeding
       await new Promise((resolve, reject) => {
         req.session.save(err => {
@@ -131,7 +128,7 @@ exports.addToCart = async (req, res) => {
       // Fetch Product Details for All Items in the Cart
       const populatedItems = await Product.find({
         _id: { $in: cart.items.map(item => item.product) }
-      }, 'name price image');
+      }, 'name price images ');
 
       // Prepare the Response Cart with Populated Product Details
       const responseCart = {
@@ -245,8 +242,9 @@ exports.getCart = async (req, res) => {
         return {
           name: product.name,
           price: item.price,
+          originalPrice: product.price,
           quantity: item.quantity,
-          image: `${cloudFrontUrl}/${image}`,
+          image: `${cloudFrontUrl}${image}`,
           variant: item.variant,
           weight: product.weight
         };
@@ -262,7 +260,6 @@ exports.getCart = async (req, res) => {
 
 exports.getMiniCart = async (req, res) => {
   if (req.user) console.log('User logged in - getting mini cart');
-  else console.log('Anonymous user - getting mini cart');
 
   try {
     if (req.user) {
@@ -309,9 +306,11 @@ exports.getMiniCart = async (req, res) => {
       // =========================
       // Anonymous User Flow
       // =========================
+      console.log('Anonymous user - getting mini cart');
 
       // Retrieve cart from the session
       const cart = req.session.cart;
+      console.log('cart', cart)
 
       if (!cart || !cart.items) {
         return res.status(200).json({ items: [] });
@@ -319,9 +318,9 @@ exports.getMiniCart = async (req, res) => {
 
       // Extract all product IDs from the cart items
       const productIds = cart.items.map(item => item.product);
-
+      console.log('productIds', productIds)
       // Fetch product details from the database
-      const products = await Product.find(
+      const products = await Product.find(  
         { _id: { $in: productIds } },
         'name price images variants'
       );
@@ -335,7 +334,8 @@ exports.getMiniCart = async (req, res) => {
       // Prepare the items array with image URLs prepended by CloudFront URL
       const items = cart.items.map(item => {
         const product = productMap[item.product.toString()];
-        const image = product.images[0]
+        console.log('product', product)
+        // const image = product.images[0]
 
         // Find the variant details using variant ID
         const variantDetail = product.variants.id(item.variant);
@@ -357,6 +357,7 @@ exports.getMiniCart = async (req, res) => {
     return res.status(500).json({ message: 'Error getting mini cart', error: error.message });
   }
 };
+
 exports.getSelectedItems = async (req, res) => {
   try {
     let selectedItems = [];
@@ -437,66 +438,123 @@ exports.getSelectedItems = async (req, res) => {
       .json({ message: 'Error getting selected items', error: error.message });
   }
 };
-
 exports.updateItem = async (req, res) => {
   try {
-    const { productId, variant, quantity, selected } = req.body
+    const { productId, variant, quantity, selected } = req.body;
+    console.log('req.body', req.body)
+    let cart;
 
-    // Find the user's cart
-    const cart = await Cart.findOne({ user: req.user.id })
+    if (req.user) {
+      // Authenticated User Flow
+      cart = await Cart.findOne({ user: req.user.id });
 
-    if (!cart) {
-      return res.status(404).json({ message: 'Cart not found' })
+      if (!cart) {
+        return res.status(404).json({ message: 'Cart not found' });
+      }
+    } else {
+      // Anonymous User Flow
+      cart = req.session.cart;
+      console.log('cart', cart)
+
+      if (!cart || !cart.items) {
+        return res.status(404).json({ message: 'Cart not found' });
+      }
     }
 
     // Find the specific item in the cart
     const itemIndex = cart.items.findIndex(
-      (item) =>
-        item.product.toString() === productId && item.variant === variant
-    )
+      item => item.product.toString() === productId && item.variant === variant
+    );
 
     if (itemIndex === -1) {
-      return res.status(404).json({ message: 'Item not found in cart' })
+      return res.status(404).json({ message: 'Item not found in cart' });
     }
 
     // Optionally, fetch the latest product price from the Products collection
     // to prevent price manipulation from the frontend
-    const product = await Product.findById(productId)
+    const product = await Product.findById(productId);
 
     if (!product) {
-      return res.status(404).json({ message: 'Product not found' })
+      return res.status(404).json({ message: 'Product not found' });
     }
 
-    if (selected) {
-      cart.items[itemIndex].selected = true
-    } else {
-      cart.items[itemIndex].selected = false
+    if (selected !== undefined) {
+      cart.items[itemIndex].selected = selected;
     }
 
     // Update quantity and price
-    cart.items[itemIndex].quantity = quantity
-    cart.items[itemIndex].price = product.price * quantity
+    cart.items[itemIndex].quantity = quantity;
+    cart.items[itemIndex].price = product.price * quantity;
 
-    // Save the updated cart
-    await cart.save()
+    if (req.user) {
+      // Save the updated cart for authenticated user
+      await cart.save();
+    } else {
+      // Save the updated cart in session for anonymous user
+      req.session.cart = cart;
+    }
 
     return res.status(200).json({
       message: 'Item updated successfully',
       cart,
-    })
+    });
   } catch (error) {
-    console.error('Error updating cart item:', error)
-    return res.status(500).json({ message: 'Server error' })
+    console.error('Error updating cart item:', error);
+    return res.status(500).json({ message: 'Server error' });
   }
-}
+};
 
 exports.updateSelectedItem = async (req, res) => {
-  const { productId, variant, selected } = req.body
-  const cart = await Cart.findOne({ user: req.user.id })
-  cart.items.find(item => item.product.toString() === productId && item.variant === variant).selected = selected
-  await cart.save()
-  res.status(200).json({ message: 'Item updated successfully', cart })
-}
+  try {
+    const { productId, variant, selected } = req.body;
+
+    if (req.user) {
+      // Authenticated User Flow
+      const cart = await Cart.findOne({ user: req.user.id });
+
+      if (!cart) {
+        return res.status(404).json({ message: 'Cart not found' });
+      }
+
+      const item = cart.items.find(
+        item => item.product.toString() === productId && item.variant === variant
+      );
+
+      if (!item) {
+        return res.status(404).json({ message: 'Item not found in cart' });
+      }
+
+      item.selected = selected;
+      await cart.save();
+
+      return res.status(200).json({ message: 'Item updated successfully', cart });
+    } else {
+      // Anonymous User Flow
+      const cart = req.session.cart;
+
+      if (!cart || !cart.items) {
+        return res.status(404).json({ message: 'Cart not found' });
+      }
+
+      const item = cart.items.find(
+        item => item.product.toString() === productId && item.variant === variant
+      );
+
+      if (!item) {
+        return res.status(404).json({ message: 'Item not found in cart' });
+      }
+
+      item.selected = selected;
+      req.session.cart = cart;
+
+      return res.status(200).json({ message: 'Item updated successfully', cart });
+    }
+  } catch (error) {
+    console.error('Error updating cart item:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 /**
  * Clears the cart.
  * Supports both anonymous and authenticated users.
