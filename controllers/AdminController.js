@@ -7,9 +7,9 @@ const { uploadToS3, deleteFromS3 } = require('../utils/s3Upload')
 //                            Users
 // ==============================================================================
 
-exports.getUsers = async (req, res) => {
+exports.getNumberOfUsers = async (req, res) => {
   try {
-    const users = await User.find()
+    const users = await User.countDocuments()
     res.status(200).json({ success: true, data: users })
   } catch (error) {  
     res.status(500).json({ success: false, message: error.message })
@@ -96,6 +96,24 @@ exports.getRevenue = async (req, res) => {
   try {
     const revenue = await Order.aggregate([{ $group: { _id: null, total: { $sum: '$total' } } }])
     res.status(200).json({ success: true, data: revenue })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+exports.getRevenueByMonth = async (req, res) => {
+  try {
+    const revenue = await Order.aggregate([{ $group: { _id: { month: { $month: '$createdAt' } }, total: { $sum: '$total' } } }])
+    res.status(200).json({ success: true, data: revenue })
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message })
+  }
+}
+
+exports.getCompletedOrders = async (req, res) => {
+  try {
+    const orders = await Order.find({ status: 'delivered' })
+    res.status(200).json({ success: true, data: orders })
   } catch (error) {
     res.status(500).json({ success: false, message: error.message })
   }
