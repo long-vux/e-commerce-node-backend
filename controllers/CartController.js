@@ -285,11 +285,13 @@ exports.getMiniCart = async (req, res) => {
         }
       });
 
+      console.log('productMap------------------------------------', productMap)
+
       // Prepare the items array with image URLs prepended by CloudFront URL
       const items = cart.items.map(item => {
         const product = productMap[item.product._id.toString()];
         const image = product.images[0]
-
+        console.log('product.images[0]------------------------------------', product.images[0])
         // Find the variant details using variant ID
         const variantDetail = product.variants.id(item.variant);
         const variantInfo = variantDetail ? `${variantDetail.size} - ${variantDetail.color}` : 'Variant not found';
@@ -337,7 +339,7 @@ exports.getMiniCart = async (req, res) => {
       const items = cart.items.map(item => {
         const product = productMap[item.product.toString()];
         console.log('product', product)
-        // const image = product.images[0]
+        const image = product.images[0]
 
         // Find the variant details using variant ID
         const variantDetail = product.variants.id(item.variant);
