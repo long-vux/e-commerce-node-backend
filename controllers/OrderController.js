@@ -19,9 +19,9 @@ const getOrdersOfUser = async (req, res) => {
 };
 
 const getHistoryOfUser = async (req, res) => {
-  const { user } = req.params;
+  const { id } = req.user;
   try {
-    const orders = await Order.find({ user, status: "delivered" }).sort({ createdAt: -1 });
+    const orders = await Order.find({ user: id, status: "delivered" }).sort({ createdAt: -1 });
     res.status(200).json(orders);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -53,11 +53,11 @@ const updateOrder = async (req, res) => {
       const items = order.items;
       for (let i = 0; i < items.length; i++) {
         const product = await Product.findById(items[i].product); // find product
-
+        console.log(product)
         // update total sold of product
         product.totalSold += items[i].quantity;
         // update stock of variant
-        product.variants[items[i].variant].stock -= items[i].quantity;
+        product.variants.find(variant => variant.name === items[i].variant).stock -= items[i].quantity;
         await product.save();
       }
       res.status(200).json(order);

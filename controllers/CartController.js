@@ -672,7 +672,7 @@ exports.removeCoupon = async (req, res) => {
 }
 
 exports.checkout = async (req, res) => {
-  const { firstName, lastName, email, address, selectedItems, total, discount, shippingFee, tax } = req.body;
+  const { firstName, lastName, email, address, selectedItems, total, discount, shippingFee, tax, receiverPhone, receiverName } = req.body;
   
   if (!selectedItems || selectedItems.length === 0) {
     return res.status(400).json({ message: 'No items selected' });
@@ -746,11 +746,24 @@ exports.checkout = async (req, res) => {
       shippingFee: shippingFee || 0,
       tax: tax || 0,
       shippingAddress: address,
-      status: 'pending'
+      status: 'pending',
+      receiverPhone: receiverPhone,
+      receiverName: receiverName
     });
 
     user.orders.push(order._id);
     await user.save();
+    // update coupon usage
+    if (cart.coupon) {
+      const coupon = await Coupon.findOne({ _id: cart.coupon });
+      coupon.usage += 1;
+      coupon.maxUsage -= 1;
+
+      if (coupon.maxUsage <= 0) {
+        coupon.isActive = false;
+      }
+      await coupon.save();
+    }
 
     if (req.user) {
       cart.items = cart.items.filter(item => !selectedCartItems.some(selectedItem => selectedItem.product.toString() === item.product.toString() && selectedItem.variant === item.variant));

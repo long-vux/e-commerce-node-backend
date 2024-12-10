@@ -44,7 +44,7 @@ exports.banUser = async (req, res) => {
 
 exports.getOrdersPaginated = async (req, res) => {
   try {
-    const { page = 1, limit = 20, filter } = req.query;
+    const { filter } = req.query;
     const query = {};
 
     const now = new Date();
@@ -81,12 +81,11 @@ exports.getOrdersPaginated = async (req, res) => {
 
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(parseInt(limit));
+      .populate('user', 'name email')
 
     const total = await Order.countDocuments(query);
 
-    res.status(200).json({ success: true, data: orders, total, page, pages: Math.ceil(total / limit) });
+    res.status(200).json({ success: true, data: orders, total });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
