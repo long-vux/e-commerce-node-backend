@@ -3,6 +3,7 @@ const Product = require("../models/Product");
 
 const getOrdersOfUser = async (req, res) => {
   const { id } = req.user;
+  
   try {
     const orders = await Order.find({ user: id }).populate('items.product', 'name price images').lean();
     // add cloudFront url to images

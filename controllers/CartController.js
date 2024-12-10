@@ -600,6 +600,7 @@ exports.removeCoupon = async (req, res) => {
 // Create a new user when checkout but not login
 exports.checkout = async (req, res) => {
   const { firstName, lastName, email, address, selectedItems } = req.body // selectedItems is an array of objects with productId and variant
+  console.log("this is user from check out: ", req.user)
   if (!selectedItems) {
     return res.status(400).json({ message: 'No items selected' })
   }
