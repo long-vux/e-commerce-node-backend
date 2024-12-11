@@ -5,24 +5,7 @@ const getOrdersOfUser = async (req, res) => {
   const { id } = req.user;
   
   try {
-    const orders = await Order.find({ user: id }).populate('items.product', 'name price images').lean();
-    // add cloudFront url to images
-    orders.forEach(order => {
-      order.items.forEach(item => {
-        console.log(item.product.images[0])
-        item.product.image = `${process.env.CLOUDFRONT_URL}${item.product.images[0]}`;
-      });
-    });
-    res.status(200).json(orders);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-const getHistoryOfUser = async (req, res) => {
-  const { id } = req.user;
-  try {
-    const orders = await Order.find({ user: id, status: "delivered" }).sort({ createdAt: -1 });
+    const orders = await Order.find({ user: id }).populate('user', 'name phone').lean();
     res.status(200).json(orders);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -82,7 +65,6 @@ const deleteOrder = async (req, res) => {
 
 module.exports = {
   getOrdersOfUser,
-  getHistoryOfUser,
   getOrderDetails,
   updateOrder,
   deleteOrder

@@ -7,6 +7,7 @@ const AddressSchema = new mongoose.Schema({
   street: { type: String },
   receiverName: { type: String },
   receiverPhone: { type: String },
+  receiverEmail: { type: String },
   districtId: { type: Number },
 }, { timestamps: true });
 

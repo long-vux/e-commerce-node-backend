@@ -1,10 +1,11 @@
-const bcrypt = require('bcrypt')
+const bcrypt = require('bcryptjs')
 const User = require('../models/User')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const crypto = require('crypto')
 const { uploadToS3 } = require('../utils/s3Upload')
 const jwt = require('jsonwebtoken')
+const mongoose = require('mongoose');
 
 exports.updateProfile = async (req, res) => {
   try {
@@ -37,7 +38,8 @@ exports.updateProfile = async (req, res) => {
       email: user.email,
       firstName: user.firstName,
       lastName: user.lastName,
-      phone: user.phone
+      phone: user.phone,
+      role: user.role
     }
     if (fileName) { // get image from cloudfront
       payload.image = `${process.env.CLOUDFRONT_URL}${fileName}`;
@@ -154,7 +156,6 @@ exports.getAddresses = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 }
-const mongoose = require('mongoose');
 
 // User Action: User adds a new address.
 exports.addAddress = async (req, res) => {
