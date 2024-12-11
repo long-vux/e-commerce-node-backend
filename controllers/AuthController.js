@@ -164,7 +164,7 @@ exports.register = async (req, res) => {
       password: hashedPassword,
       firstName,
       lastName,
-      phoneNumber
+      phone: phoneNumber
     })
 
     const token = await VerifyToken.create({

@@ -90,6 +90,7 @@ exports.getOrdersPaginated = async (req, res) => {
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
       .populate('user', 'name email')
+      .populate('items.product', 'name')
 
     const total = await Order.countDocuments(query);
 

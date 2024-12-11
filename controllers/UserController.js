@@ -147,8 +147,9 @@ exports.getAddresses = async (req, res) => {
     } else {
       // anonymous user
       const cart = req.session.cart;
+      console.log('cart', cart)
       if (!cart || !cart.addresses) {
-        return res.status(404).json({ success: false, message: 'Cart not found' });
+        return res.status(200).json({ success: true, data: [] });
       }
       res.status(200).json({ success: true, data: cart.addresses });
     }
@@ -250,15 +251,16 @@ exports.deleteAddress = async (req, res) => {
       const user = await User.findById(userId);
 
       if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
+          return res.status(404).json({ success: false, message: 'User not found' });
       }
 
+      // Use Mongoose's pull method to remove the address
       const address = user.addresses.id(addressId);
       if (!address) {
-        return res.status(404).json({ success: false, message: 'Address not found' });
+          return res.status(404).json({ success: false, message: 'Address not found' });
       }
 
-      address.remove();
+      user.addresses.pull(addressId); // Removes the address by ID
       await user.save();
 
       return res.status(200).json({ success: true, message: 'Address deleted' });

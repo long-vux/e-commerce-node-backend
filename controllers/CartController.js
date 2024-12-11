@@ -172,6 +172,7 @@ exports.getCart = async (req, res) => {
       // =======================
       // Authenticated User Flow
       // =======================
+      console.log('User logged in - getting cart')
 
       // Retrieve cart from the database with populated product details
       let cart = await Cart.findOne({ user: req.user.id }).populate('items.product', 'name price images weight ');
@@ -211,9 +212,10 @@ exports.getCart = async (req, res) => {
       // =========================
       // Anonymous User Flow
       // =========================
-
+      console.log('Anonymous user - getting cart')
       // Retrieve cart from the session
       let cart = req.session.cart;
+      console.log('cart', cart)
 
       // If no cart exists in the session, respond with an empty cart
       if (!cart || !cart.items) {
@@ -262,7 +264,6 @@ exports.getCart = async (req, res) => {
 
 exports.getMiniCart = async (req, res) => {
   if (req.user) console.log('User logged in - getting mini cart');
-
   try {
     if (req.user) {
       // =======================
@@ -315,7 +316,7 @@ exports.getMiniCart = async (req, res) => {
       // Retrieve cart from the session
       const cart = req.session.cart;
       console.log('cart', cart)
-
+      
       if (!cart || !cart.items) {
         return res.status(200).json({ items: [] });
       }
@@ -736,6 +737,7 @@ exports.removeCoupon = async (req, res) => {
 exports.checkout = async (req, res) => {
   const { receiverName, receiverEmail, receiverPhone, address, selectedItems, total, discount, shippingFee, tax} = req.body;
   
+  console.log('receiverEmail', receiverEmail)
   if (!selectedItems || selectedItems.length === 0) {
     return res.status(400).json({ message: 'No items selected' });
   }
@@ -810,7 +812,8 @@ exports.checkout = async (req, res) => {
       shippingAddress: address,
       status: 'pending',
       receiverPhone: receiverPhone,
-      receiverName: receiverName
+      receiverName: receiverName,
+      receiverEmail: receiverEmail
     });
 
     user.orders.push(order._id);
