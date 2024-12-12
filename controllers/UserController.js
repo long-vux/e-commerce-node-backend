@@ -1,10 +1,12 @@
-const bcrypt = require('bcrypt')
+const bcrypt = require('bcryptjs')
 const User = require('../models/User')
 const VerifyToken = require('../models/VerifyToken')
 const sendEmail = require('../utils/sendEmail')
 const crypto = require('crypto')
 const { uploadToS3 } = require('../utils/s3Upload')
 const jwt = require('jsonwebtoken')
+const mongoose = require('mongoose');
+
 
 exports.updateProfile = async (req, res) => {
   try {
@@ -154,7 +156,6 @@ exports.getAddresses = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 }
-const mongoose = require('mongoose');
 
 // User Action: User adds a new address.
 exports.addAddress = async (req, res) => {
@@ -238,7 +239,6 @@ exports.updateAddress = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-// User Action: User deletes an existing address.
 exports.deleteAddress = async (req, res) => {
   try {
     const { addressId } = req.params;
@@ -246,19 +246,16 @@ exports.deleteAddress = async (req, res) => {
     if (req.user) {
       // Authenticated user
       const userId = req.user.id;
-      const user = await User.findById(userId);
 
-      if (!user) {
-        return res.status(404).json({ success: false, message: 'User not found' });
+      const result = await User.findByIdAndUpdate(
+        userId,
+        { $pull: { addresses: { _id: addressId } } }, // Remove the address with matching `_id`
+        { new: true } // Return the updated document
+      );
+
+      if (!result) {
+        return res.status(404).json({ success: false, message: 'User not found or address does not exist' });
       }
-
-      const address = user.addresses.id(addressId);
-      if (!address) {
-        return res.status(404).json({ success: false, message: 'Address not found' });
-      }
-
-      address.remove();
-      await user.save();
 
       return res.status(200).json({ success: true, message: 'Address deleted' });
     } else {

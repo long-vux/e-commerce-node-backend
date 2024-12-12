@@ -114,11 +114,13 @@ exports.sortByPrice = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 }
+
+// get best selling products
 exports.getBestSellingProducts = async (req, res) => {
   try {
     // Step 1: Fetch Relevant Orders
     const orders = await Order.find({
-      status: { $in: ["completed", "shipped", "delivered"] }
+      status: { $in: ["completed","delivered"] }
     }).select('items');
     console.log(orders);
 
